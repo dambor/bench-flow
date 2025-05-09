@@ -1,3 +1,6 @@
+// Modify your Notifications.jsx component to prevent any popup notifications
+// by adding a filter for specific notification types or messages
+
 import React from 'react';
 import { 
   Snackbar, 
@@ -17,8 +20,26 @@ function SlideTransition(props) {
 const Notifications = () => {
   const { notifications, removeNotification } = useAppContext();
   
-  // No notifications, don't render anything
-  if (!notifications.length) {
+  // Filter out specific notifications you don't want to show
+  const filteredNotifications = notifications.filter(notification => {
+    // Hide "Workflow Started" notifications
+    if (notification.title === 'Workflow Started' && 
+        notification.message && 
+        notification.message.includes('has been created')) {
+      return false;
+    }
+    
+    // Hide "Workflow Resumed" notifications
+    if (notification.title === 'Workflow Resumed') {
+      return false;
+    }
+    
+    // Keep all other notifications
+    return true;
+  });
+  
+  // No notifications to show, don't render anything
+  if (!filteredNotifications.length) {
     return null;
   }
   
@@ -29,7 +50,7 @@ const Notifications = () => {
   
   return (
     <>
-      {notifications.map((notification, index) => (
+      {filteredNotifications.map((notification, index) => (
         <Snackbar
           key={`${notification.id}-${index}`}
           open={true}

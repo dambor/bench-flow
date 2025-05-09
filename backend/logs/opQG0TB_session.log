@@ -1,0 +1,17 @@
+2025-05-09 15:31:55,192 [main] INFO : Configured scenario log at logs/opQG0TB_session.log
+2025-05-09 15:31:55,194 [main] INFO : Running NoSQLBench Version 5.21.5-release
+2025-05-09 15:31:55,194 [main] INFO : command-line: /var/folders/rq/l_3l7jj53jv7h96sfgks23j80000gp/T/tmp90879vzn.yaml host=localhost localdc=datacenter1 keyspace=baselines cycles=5000000 threads=8 --progress console:1s
+2025-05-09 15:31:55,414 [main] INFO : client-hardware: {"logical-cores":"12","max-frequency-ghz":"0.00","physical-cores":"12","if-speeds":["0Mib","16Mib"],"heap-max-GiB":"12.00","processor-name":"Apple M4 Pro","memory-GiB":"48.00","sockets":"1"}
+2025-05-09 15:31:55,506 [main] INFO : workload URI: 'file:///var/folders/rq/l_3l7jj53jv7h96sfgks23j80000gp/T/tmp90879vzn.yaml'
+2025-05-09 15:31:55,508 [main] WARN : <<key:value>> deprecated in         CREATE TABLE if not exists <<keyspace:centralpayment>>.pay_with_app_pending_reversal_by_id (
+2025-05-09 15:31:55,508 [main] WARN : <<key:value>> deprecated in           insert into <<keyspace:centralpayment>>.pay_with_app_pending_reversal_by_id (
+2025-05-09 15:31:55,517 [main] ERROR: while scanning a simple key
+ in reader, line 23, column 1:
+    ;
+    ^
+could not find expected ':'
+ in reader, line 24, column 10:
+      rampup1:
+             ^
+
+2025-05-09 15:31:55,517 [main] ERROR: for the full stack trace, run with --show-stacktraces

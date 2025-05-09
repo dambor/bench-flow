@@ -29,12 +29,12 @@ export const SchemaProvider = ({ children }) => {
       // Extract table names
       const tableNames = Object.keys(result.tables || {});
       setSelectedTables(tableNames);
-      
+      /*
       addNotification({
         type: 'success',
         title: 'Schema Parsed',
         message: `Successfully parsed schema with ${tableNames.length} tables`,
-      });
+      });*/
       
       // Update workflow if active
       updateWorkflow({
@@ -76,12 +76,12 @@ export const SchemaProvider = ({ children }) => {
     try {
       const result = await schemaApi.generateYaml(schemaData, tables);
       setGeneratedYamlFiles(result.files || []);
-      
+      /*
       addNotification({
         type: 'success',
         title: 'YAML Generated',
         message: `Successfully generated ${result.files.length} YAML files`,
-      });
+      });*/
       
       // Update workflow if active
       updateWorkflow({

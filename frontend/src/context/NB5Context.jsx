@@ -29,7 +29,7 @@ export const NB5Provider = ({ children }) => {
       const result = await nb5Api.validate();
       setIsValidated(result.valid);
       setNB5Path(result.path);
-      
+      /*
       if (result.valid) {
         addNotification({
           type: 'success',
@@ -37,6 +37,15 @@ export const NB5Provider = ({ children }) => {
           message: `NB5 JAR found at ${result.path}`,
         });
       } else {
+        addNotification({
+          type: 'warning',
+          title: 'NB5 Not Found',
+          message: `NB5 JAR not found at ${result.path}`,
+          persistent: true,
+        });
+      }*/
+
+      if (!result.valid) {
         addNotification({
           type: 'warning',
           title: 'NB5 Not Found',
@@ -59,13 +68,13 @@ export const NB5Provider = ({ children }) => {
     try {
       const result = await nb5Api.generateCommand(params);
       setCurrentCommand(result.command);
-      
+      /*
       addNotification({
         type: 'info',
         title: 'Command Generated',
         message: 'NB5 command has been generated',
       });
-      
+      */
       return result;
     } catch (error) {
       setError(error);
@@ -102,12 +111,12 @@ export const NB5Provider = ({ children }) => {
       // Update executions list
       setExecutions(prev => [execution, ...prev]);
       setActiveExecution(execution);
-      
+      /*
       addNotification({
         type: 'success',
         title: 'Execution Started',
         message: `NB5 execution started with ID: ${result.execution_id}`,
-      });
+      });*/
       
       return execution;
     } catch (error) {
@@ -171,13 +180,13 @@ export const NB5Provider = ({ children }) => {
           });
           
           // Send notification about completion
-          addNotification({
+          /*addNotification({
             type: status.status === 'completed' ? 'success' : 'error',
             title: status.status === 'completed' ? 'Execution Complete' : 'Execution Failed',
             message: status.status === 'completed' 
               ? 'NB5 execution completed successfully' 
               : `NB5 execution ${status.status}`,
-          });
+          });*/
         }
       } catch (error) {
         console.error('Error polling execution status:', error);
@@ -286,13 +295,13 @@ export const NB5Provider = ({ children }) => {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      
+      /*
       addNotification({
         type: 'success',
         title: 'Script Downloaded',
         message: `${filename} has been downloaded`,
       });
-      
+      */
       return true;
     } catch (error) {
       setError(error);

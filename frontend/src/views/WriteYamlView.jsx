@@ -77,8 +77,16 @@ const WriteYamlView = ({ onNext }) => {
     if (!files || files.length === 0) return;
     
     try {
-      // Start a new workflow if one isn't already in progress
-      startWorkflow("NoSQLBench Schema Generation", "Generate YAML files for NoSQLBench from Cassandra schema");
+      // Simply update the existing workflow with a new step
+      // Do NOT create a new workflow here - this is what's causing the duplication
+      updateWorkflow({
+        steps: [{
+          name: 'Upload Schema',
+          status: 'in-progress',
+          timestamp: new Date(),
+          details: `Parsing schema file: ${files[0].name}`
+        }]
+      });
       
       await parseSchema(files[0]);
     } catch (error) {
@@ -143,13 +151,13 @@ const WriteYamlView = ({ onNext }) => {
       
       const files = await generateYaml(selectedTables);
       
-      if (files && files.length > 0) {
+      /*if (files && files.length > 0) {
         addNotification({
           type: 'success',
           title: 'YAML Generated',
           message: `Successfully generated ${files.length} YAML files`
         });
-      }
+      }*/
     } catch (error) {
       console.error('Error generating YAML:', error);
     } finally {
@@ -182,12 +190,12 @@ const WriteYamlView = ({ onNext }) => {
     a.click();
     window.URL.revokeObjectURL(url);
     a.remove();
-    
+    /*
     addNotification({
       type: 'success',
       title: 'File Downloaded',
       message: `${selectedYamlFile} has been downloaded`,
-    });
+    });*/
   };
   
   // Handle next button click

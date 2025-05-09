@@ -4,7 +4,6 @@ import {
   Container,
   Typography,
   Button,
-  Grid,
   Card,
   CardHeader,
   CardContent,
@@ -25,7 +24,14 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  TextField
+  TextField,
+  Grid,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Tooltip
 } from '@mui/material';
 import PlayCircleFilledIcon from '@mui/icons-material/PlayCircleFilled';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -35,6 +41,9 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import AddIcon from '@mui/icons-material/Add';
+import ReplayIcon from '@mui/icons-material/Replay';
+import DeleteIcon from '@mui/icons-material/Delete';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 
 import { useAppContext } from '../context/AppContext';
 import { useSchemaContext } from '../context/SchemaContext';
@@ -44,7 +53,12 @@ import { healthApi } from '../services/api';
 
 // Dashboard View
 const DashboardView = ({ onStart }) => {
-  const { isBackendConnected, currentWorkflow, startWorkflow } = useAppContext();
+  const { 
+    isBackendConnected, 
+    currentWorkflow, 
+    startWorkflow, 
+    resumeWorkflow  // Make sure this exists in your AppContext
+  } = useAppContext();
   const { schemaData, clearSchema } = useSchemaContext();
   const { isValidated: isDSBulkValidated } = useDSBulkContext();
   const { isValidated: isNB5Validated, executions } = useNB5Context();
@@ -56,8 +70,13 @@ const DashboardView = ({ onStart }) => {
   });
   
   const [openNewFlowDialog, setOpenNewFlowDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [newFlowName, setNewFlowName] = useState('');
   const [newFlowDescription, setNewFlowDescription] = useState('');
+  const [workflows, setWorkflows] = useState([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [activeMenuWorkflowId, setActiveMenuWorkflowId] = useState(null);
   
   // Check system status on component mount
   useEffect(() => {
@@ -82,6 +101,90 @@ const DashboardView = ({ onStart }) => {
     checkHealth();
   }, [executions]);
   
+  // Initialize workflows from localStorage on component mount
+  useEffect(() => {
+    const savedWorkflows = localStorage.getItem('nosqlbench_workflows');
+    if (savedWorkflows) {
+      try {
+        const parsedWorkflows = JSON.parse(savedWorkflows);
+        
+        // Remove duplicates by ID before setting the state
+        const uniqueWorkflows = [];
+        const seenIds = new Set();
+        
+        parsedWorkflows.forEach(workflow => {
+          if (!seenIds.has(workflow.id)) {
+            seenIds.add(workflow.id);
+            uniqueWorkflows.push(workflow);
+          }
+        });
+        
+        setWorkflows(uniqueWorkflows);
+      } catch (error) {
+        console.error('Error loading saved workflows:', error);
+      }
+    } else {
+      // Set initial mock workflows if none exist
+      const initialWorkflows = [
+        {
+          id: 101,
+          name: "User Activity Benchmarks",
+          status: "in-progress",
+          progress: 65,
+          startTime: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+          updatedAt: new Date(Date.now() - 1000 * 60 * 30)
+        },
+        {
+          id: 102,
+          name: "Product Catalog Test",
+          status: "completed",
+          progress: 100,
+          startTime: new Date(Date.now() - 1000 * 60 * 120), // 2 hours ago
+          updatedAt: new Date(Date.now() - 1000 * 60 * 120)
+        }
+      ];
+      
+      setWorkflows(initialWorkflows);
+      localStorage.setItem('nosqlbench_workflows', JSON.stringify(initialWorkflows));
+    }
+  }, []);
+  
+  // Update workflows in localStorage when they change
+  useEffect(() => {
+    if (workflows.length > 0) {
+      localStorage.setItem('nosqlbench_workflows', JSON.stringify(workflows));
+    }
+  }, [workflows]);
+  
+  // Add current workflow to workflows list when it changes
+  useEffect(() => {
+    if (currentWorkflow) {
+      setWorkflows(prevWorkflows => {
+        // Check if the workflow already exists in the list
+        const existingIndex = prevWorkflows.findIndex(w => w.id === currentWorkflow.id);
+        
+        if (existingIndex >= 0) {
+          // Update existing workflow
+          const updatedWorkflows = [...prevWorkflows];
+          updatedWorkflows[existingIndex] = {
+            ...currentWorkflow,
+            updatedAt: new Date()
+          };
+          return updatedWorkflows;
+        } else {
+          // Add new workflow to the list
+          return [
+            {
+              ...currentWorkflow,
+              updatedAt: new Date()
+            },
+            ...prevWorkflows
+          ];
+        }
+      });
+    }
+  }, [currentWorkflow]);
+  
   // Handle opening the new flow dialog
   const handleOpenNewFlowDialog = () => {
     setNewFlowName('');
@@ -94,6 +197,18 @@ const DashboardView = ({ onStart }) => {
     setOpenNewFlowDialog(false);
   };
   
+  // Handle opening the menu for a workflow
+  const handleOpenMenu = (event, workflowId) => {
+    setMenuAnchorEl(event.currentTarget);
+    setActiveMenuWorkflowId(workflowId);
+  };
+  
+  // Handle closing the menu
+  const handleCloseMenu = () => {
+    setMenuAnchorEl(null);
+    setActiveMenuWorkflowId(null);
+  };
+  
   // Handle starting a new flow
   const handleStartNewFlow = () => {
     // Use default name if none provided
@@ -101,7 +216,7 @@ const DashboardView = ({ onStart }) => {
     const flowDescription = newFlowDescription.trim() || `Started on ${new Date().toLocaleString()}`;
     
     // Start a brand new workflow
-    startWorkflow(flowName, flowDescription);
+    const newWorkflow = startWorkflow(flowName, flowDescription);
     
     // Clear any existing schema data
     clearSchema();
@@ -115,29 +230,55 @@ const DashboardView = ({ onStart }) => {
     }
   };
   
-  // Workflow items - would come from an API in a real application
-  const workflowItems = [
-    currentWorkflow ? {
-      ...currentWorkflow,
-      updatedAt: currentWorkflow.endTime || new Date()
-    } : null,
-    {
-      id: 101,
-      name: "User Activity Benchmarks",
-      status: "in-progress",
-      progress: 65,
-      startTime: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-      updatedAt: new Date(Date.now() - 1000 * 60 * 30)
-    },
-    {
-      id: 102,
-      name: "Product Catalog Test",
-      status: "completed",
-      progress: 100,
-      startTime: new Date(Date.now() - 1000 * 60 * 120), // 2 hours ago
-      updatedAt: new Date(Date.now() - 1000 * 60 * 120)
+  // Handle resuming a workflow
+  const handleResumeWorkflow = (workflow) => {
+    // Close the menu if it's open
+    handleCloseMenu();
+    
+    // Find the workflow by id
+    const workflowToResume = workflows.find(w => w.id === workflow.id);
+    
+    if (workflowToResume) {
+      // Resume the workflow
+      resumeWorkflow(workflowToResume);
+      
+      // Navigate to the appropriate step based on progress
+      if (onStart) {
+        onStart();
+      }
     }
-  ].filter(Boolean);
+  };
+  
+  // Handle opening delete confirmation dialog
+  const handleOpenDeleteDialog = (workflow) => {
+    // Close the menu if it's open
+    handleCloseMenu();
+    
+    // Set the selected workflow for deletion
+    setSelectedWorkflow(workflow);
+    setOpenDeleteDialog(true);
+  };
+  
+  // Handle closing delete confirmation dialog
+  const handleCloseDeleteDialog = () => {
+    setOpenDeleteDialog(false);
+    setSelectedWorkflow(null);
+  };
+  
+  // Handle deleting a workflow
+  const handleDeleteWorkflow = () => {
+    if (!selectedWorkflow) return;
+    
+    // Remove the workflow from the list
+    const updatedWorkflows = workflows.filter(w => w.id !== selectedWorkflow.id);
+    setWorkflows(updatedWorkflows);
+    
+    // Update localStorage
+    localStorage.setItem('nosqlbench_workflows', JSON.stringify(updatedWorkflows));
+    
+    // Close the dialog
+    handleCloseDeleteDialog();
+  };
   
   return (
     <Container maxWidth="xl">
@@ -174,19 +315,47 @@ const DashboardView = ({ onStart }) => {
         {/* Recent Workflows */}
         <Grid item xs={12} md={8}>
           <Card>
-            <CardHeader title="Recent Workflows" />
+            <CardHeader 
+              title="Recent Workflows" 
+              action={
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  startIcon={<PlayCircleFilledIcon />}
+                  onClick={handleOpenNewFlowDialog}
+                >
+                  New Workflow
+                </Button>
+              }
+            />
             <CardContent>
-              <Stack spacing={2}>
-                {workflowItems.map((workflow) => (
-                  <WorkflowItem 
-                    key={workflow.id}
-                    name={workflow.name} 
-                    status={workflow.status} 
-                    progress={workflow.progress}
-                    updatedAt={timeSince(workflow.updatedAt)}
-                  />
-                ))}
-              </Stack>
+              {workflows.length > 0 ? (
+                <Stack spacing={2}>
+                  {workflows.map((workflow) => (
+                    <WorkflowItem 
+                      key={workflow.id}
+                      workflow={workflow}
+                      onMenuOpen={(e) => handleOpenMenu(e, workflow.id)}
+                      onResume={() => handleResumeWorkflow(workflow)}
+                      onDelete={() => handleOpenDeleteDialog(workflow)}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">
+                    No workflows yet. Start a new workflow to get started.
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    startIcon={<AddIcon />}
+                    onClick={handleOpenNewFlowDialog}
+                    sx={{ mt: 2 }}
+                  >
+                    Start New Workflow
+                  </Button>
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -306,7 +475,7 @@ const DashboardView = ({ onStart }) => {
                   </Typography>
                 </Box>
                 <Typography variant="h4" component="div" gutterBottom>
-                  {workflowItems.length}
+                  {workflows.length}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Recent workloads
@@ -431,6 +600,51 @@ const DashboardView = ({ onStart }) => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Delete Workflow Dialog */}
+      <Dialog
+        open={openDeleteDialog}
+        onClose={handleCloseDeleteDialog}
+      >
+        <DialogTitle>Delete Workflow</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete the workflow "{selectedWorkflow?.name}"? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button onClick={handleDeleteWorkflow} variant="contained" color="error" startIcon={<DeleteIcon />}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Workflow Action Menu */}
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleCloseMenu}
+      >
+        <MenuItem onClick={() => {
+          const workflow = workflows.find(w => w.id === activeMenuWorkflowId);
+          if (workflow) handleResumeWorkflow(workflow);
+        }}>
+          <ListItemIcon>
+            <ReplayIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Resume Workflow</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => {
+          const workflow = workflows.find(w => w.id === activeMenuWorkflowId);
+          if (workflow) handleOpenDeleteDialog(workflow);
+        }}>
+          <ListItemIcon>
+            <DeleteIcon fontSize="small" color="error" />
+          </ListItemIcon>
+          <ListItemText>Delete Workflow</ListItemText>
+        </MenuItem>
+      </Menu>
     </Container>
   );
 };
@@ -439,7 +653,8 @@ const DashboardView = ({ onStart }) => {
 function timeSince(date) {
   if (!date) return 'Unknown time';
   
-  const seconds = Math.floor((new Date() - date) / 1000);
+  const dateObj = date instanceof Date ? date : new Date(date);
+  const seconds = Math.floor((new Date() - dateObj) / 1000);
   
   let interval = Math.floor(seconds / 31536000);
   if (interval > 1) return interval + ' years ago';
@@ -465,14 +680,16 @@ function timeSince(date) {
 }
 
 // Workflow Item Component
-function WorkflowItem({ name, status, progress, updatedAt }) {
+function WorkflowItem({ workflow, onMenuOpen, onResume, onDelete }) {
+  const { name, status, progress, updatedAt } = workflow;
+  
   const statusConfig = {
     'completed': { color: 'success', label: 'Completed' },
     'in-progress': { color: 'info', label: 'In Progress' },
     'failed': { color: 'error', label: 'Failed' }
   };
   
-  const config = statusConfig[status];
+  const config = statusConfig[status] || statusConfig['in-progress'];
   
   return (
     <Paper 
@@ -487,7 +704,7 @@ function WorkflowItem({ name, status, progress, updatedAt }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Typography variant="subtitle1">{name}</Typography>
-          <Typography variant="body2" color="text.secondary">{updatedAt}</Typography>
+          <Typography variant="body2" color="text.secondary">{timeSince(updatedAt)}</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Box sx={{ width: 100 }}>
@@ -502,6 +719,32 @@ function WorkflowItem({ name, status, progress, updatedAt }) {
             color={config.color} 
             size="small" 
           />
+          <Box sx={{ ml: 1, display: 'flex' }}>
+            <Tooltip title="Resume Workflow">
+              <IconButton 
+                size="small" 
+                onClick={onResume}
+                color="primary"
+              >
+                <ReplayIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete Workflow">
+              <IconButton 
+                size="small" 
+                onClick={onDelete}
+                color="error"
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <IconButton 
+              size="small" 
+              onClick={onMenuOpen}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
       </Box>
     </Paper>

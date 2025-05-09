@@ -1,3 +1,5 @@
+// Updated App.jsx with the popup dialog removed
+
 import React, { useState, useEffect } from 'react';
 import { 
   Box, 
@@ -100,6 +102,21 @@ function App() {
 
   // Handle page navigation
   const handleNavigate = (pageId) => {
+    // If trying to navigate to a workflow step without a workflow, just go to dashboard
+    if (pageId !== 'dashboard' && pageId !== 'settings' && !currentWorkflow) {
+      setCurrentPage('dashboard');
+      
+      // Optionally show a toast notification instead of a popup
+      addNotification({
+        type: 'info',
+        title: 'No Active Workflow',
+        message: 'Please start or select a workflow from the dashboard first.',
+        duration: 4000
+      });
+      
+      return;
+    }
+    
     setCurrentPage(pageId);
     
     // Update activeStep based on page
