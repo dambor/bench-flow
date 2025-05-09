@@ -12,9 +12,9 @@ help:
 	@echo "  make setup       - Install both frontend and backend dependencies"
 	@echo "  make setup-fe    - Install frontend dependencies"
 	@echo "  make setup-be    - Install backend dependencies (requires Python 3.8+)"
-	@echo "  make start       - Start both frontend and backend servers"
-	@echo "  make start-fe    - Start frontend server only"
-	@echo "  make start-be    - Start backend server only"
+	@echo "  make run      	  - Start both frontend and backend servers"
+	@echo "  make run-fe      - Start frontend server only"
+	@echo "  make run-be      - Start backend server only"
 	@echo "  make build       - Build the frontend for production"
 	@echo "  make clean       - Remove node_modules, __pycache__, and build artifacts"
 
@@ -35,18 +35,18 @@ setup-be:
 	@echo "Backend dependencies installed."
 
 # Start targets
-.PHONY: start
-start:
+.PHONY: run
+run:
 	@echo "Starting NoSQLBench Flow application..."
-	$(MAKE) start-be & $(MAKE) start-fe
+	$(MAKE) run-be & $(MAKE) run-fe
 
-.PHONY: start-fe
-start-fe:
+.PHONY: run-fe
+run-fe:
 	@echo "Starting frontend server..."
 	cd frontend && npm run dev || npm run dev
 
-.PHONY: start-be
-start-be:
+.PHONY: run-be
+run-be:
 	@echo "Starting backend server..."
 	cd backend && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
