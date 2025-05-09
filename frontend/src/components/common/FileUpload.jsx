@@ -149,7 +149,17 @@ const FileUpload = ({
   };
   
   // Handle click on the drop zone
-  const handleZoneClick = () => {
+  const handleZoneClick = (event) => {
+    // Don't trigger if we're clicking on the button
+    // This prevents double file picker dialogs
+    if (event.target.closest('button') === null) {
+      fileInputRef.current?.click();
+    }
+  };
+  
+  // Handle file selection button click
+  const handleButtonClick = (event) => {
+    event.stopPropagation(); // Stop event propagation to prevent double dialogs
     fileInputRef.current?.click();
   };
   
@@ -217,21 +227,22 @@ const FileUpload = ({
             </Typography>
             <Button 
               variant="contained" 
-              component="label" 
+              component="span" 
               sx={{ mt: 2 }}
               disabled={isLoading}
+              onClick={handleButtonClick}
             >
               {buttonText}
-              <input 
-                type="file" 
-                hidden 
-                ref={fileInputRef}
-                accept={accept}
-                multiple={multiple}
-                onChange={handleInputChange}
-                disabled={isLoading}
-              />
             </Button>
+            <input 
+              type="file" 
+              hidden 
+              ref={fileInputRef}
+              accept={accept}
+              multiple={multiple}
+              onChange={handleInputChange}
+              disabled={isLoading}
+            />
           </>
         )}
       </Paper>

@@ -19,7 +19,13 @@ import {
   TableRow,
   LinearProgress,
   Alert,
-  Divider
+  Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  TextField
 } from '@mui/material';
 import PlayCircleFilledIcon from '@mui/icons-material/PlayCircleFilled';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -28,6 +34,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import MemoryIcon from '@mui/icons-material/Memory';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
+import AddIcon from '@mui/icons-material/Add';
 
 import { useAppContext } from '../context/AppContext';
 import { useSchemaContext } from '../context/SchemaContext';
@@ -37,8 +44,8 @@ import { healthApi } from '../services/api';
 
 // Dashboard View
 const DashboardView = ({ onStart }) => {
-  const { isBackendConnected, currentWorkflow } = useAppContext();
-  const { schemaData } = useSchemaContext();
+  const { isBackendConnected, currentWorkflow, startWorkflow } = useAppContext();
+  const { schemaData, clearSchema } = useSchemaContext();
   const { isValidated: isDSBulkValidated } = useDSBulkContext();
   const { isValidated: isNB5Validated, executions } = useNB5Context();
   
@@ -47,6 +54,10 @@ const DashboardView = ({ onStart }) => {
     lastChecked: null,
     activeWorkloads: 0
   });
+  
+  const [openNewFlowDialog, setOpenNewFlowDialog] = useState(false);
+  const [newFlowName, setNewFlowName] = useState('');
+  const [newFlowDescription, setNewFlowDescription] = useState('');
   
   // Check system status on component mount
   useEffect(() => {
@@ -70,6 +81,39 @@ const DashboardView = ({ onStart }) => {
     
     checkHealth();
   }, [executions]);
+  
+  // Handle opening the new flow dialog
+  const handleOpenNewFlowDialog = () => {
+    setNewFlowName('');
+    setNewFlowDescription('');
+    setOpenNewFlowDialog(true);
+  };
+  
+  // Handle closing the new flow dialog
+  const handleCloseNewFlowDialog = () => {
+    setOpenNewFlowDialog(false);
+  };
+  
+  // Handle starting a new flow
+  const handleStartNewFlow = () => {
+    // Use default name if none provided
+    const flowName = newFlowName.trim() || 'New Workflow';
+    const flowDescription = newFlowDescription.trim() || `Started on ${new Date().toLocaleString()}`;
+    
+    // Start a brand new workflow
+    startWorkflow(flowName, flowDescription);
+    
+    // Clear any existing schema data
+    clearSchema();
+    
+    // Close the dialog
+    handleCloseNewFlowDialog();
+    
+    // Navigate to the first step
+    if (onStart) {
+      onStart();
+    }
+  };
   
   // Workflow items - would come from an API in a real application
   const workflowItems = [
@@ -110,7 +154,7 @@ const DashboardView = ({ onStart }) => {
           variant="contained" 
           size="large" 
           startIcon={<PlayCircleFilledIcon />}
-          onClick={onStart}
+          onClick={handleOpenNewFlowDialog}
         >
           Start New Workflow
         </Button>
@@ -307,7 +351,7 @@ const DashboardView = ({ onStart }) => {
                   number={1}
                   title="Generate Write YAML"
                   status="completed"
-                  onClick={onStart}
+                  onClick={handleOpenNewFlowDialog}
                 />
                 <WorkflowConnector status="completed" />
                 <WorkflowStep 
@@ -344,6 +388,49 @@ const DashboardView = ({ onStart }) => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* New Workflow Dialog */}
+      <Dialog open={openNewFlowDialog} onClose={handleCloseNewFlowDialog}>
+        <DialogTitle>Start New Workflow</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Please provide a name and description for your new workflow. This will create a brand new workflow and clear any existing data.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="name"
+            label="Workflow Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newFlowName}
+            onChange={(e) => setNewFlowName(e.target.value)}
+            placeholder="My NoSQLBench Workflow"
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            id="description"
+            label="Description (Optional)"
+            type="text"
+            fullWidth
+            multiline
+            rows={2}
+            variant="outlined"
+            value={newFlowDescription}
+            onChange={(e) => setNewFlowDescription(e.target.value)}
+            placeholder="Brief description of this workflow"
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseNewFlowDialog}>Cancel</Button>
+          <Button onClick={handleStartNewFlow} variant="contained" startIcon={<AddIcon />}>
+            Create & Start
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

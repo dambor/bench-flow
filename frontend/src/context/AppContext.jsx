@@ -82,7 +82,7 @@ export const AppProvider = ({ children }) => {
   
   // Start a new workflow
   const startWorkflow = (name, description) => {
-    setCurrentWorkflow({
+    const newWorkflow = {
       id: Date.now(),
       name: name || 'New Workflow',
       description: description || 'Started on ' + new Date().toLocaleString(),
@@ -90,7 +90,37 @@ export const AppProvider = ({ children }) => {
       steps: [],
       status: 'in-progress',
       progress: 0,
+    };
+    
+    setCurrentWorkflow(newWorkflow);
+    return newWorkflow;
+  };
+  
+  // Resume an existing workflow
+  const resumeWorkflow = (workflow) => {
+    if (!workflow) return null;
+    
+    // Create a resumed version of the workflow
+    const resumedWorkflow = {
+      ...workflow,
+      resumedAt: new Date(),
+      lastAccessed: new Date(),
+      // Keep the original workflow properties but mark it as resumed
+      status: workflow.status === 'completed' ? 'completed' : 'in-progress',
+    };
+    
+    // Set as current workflow
+    setCurrentWorkflow(resumedWorkflow);
+    
+    // Add a notification about resuming the workflow
+    addNotification({
+      type: 'info',
+      title: 'Workflow Resumed',
+      message: `Resumed workflow: ${workflow.name}`,
+      duration: 3000,
     });
+    
+    return resumedWorkflow;
   };
   
   // Update workflow status
@@ -127,6 +157,7 @@ export const AppProvider = ({ children }) => {
     setError,
     clearNotifications,
     startWorkflow,
+    resumeWorkflow,
     updateWorkflow,
     completeWorkflow,
   };

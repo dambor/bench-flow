@@ -22,7 +22,8 @@ import {
   Chip,
   Alert,
   Paper,
-  CircularProgress
+  CircularProgress,
+  TextField
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -30,9 +31,9 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SchemaIcon from '@mui/icons-material/Schema';
 import StorageIcon from '@mui/icons-material/Storage';
 import TableViewIcon from '@mui/icons-material/TableView';
+import DescriptionIcon from '@mui/icons-material/Description';
 
 import FileUpload from '../components/common/FileUpload';
-import YamlViewer from '../components/common/YamlViewer';
 import { useSchemaContext } from '../context/SchemaContext';
 import { useAppContext } from '../context/AppContext';
 
@@ -51,6 +52,8 @@ const WriteYamlView = ({ onNext }) => {
   
   const [isGeneratingYaml, setIsGeneratingYaml] = useState(false);
   const [selectAllTables, setSelectAllTables] = useState(true);
+  const [selectedYamlFile, setSelectedYamlFile] = useState('');
+  const [selectedYamlContent, setSelectedYamlContent] = useState('');
   
   // When schema data changes, update selected tables state
   useEffect(() => {
@@ -60,6 +63,14 @@ const WriteYamlView = ({ onNext }) => {
       setSelectAllTables(true);
     }
   }, [schemaData]);
+  
+  // When generated YAML files change, update selected YAML file
+  useEffect(() => {
+    if (generatedYamlFiles && generatedYamlFiles.length > 0) {
+      setSelectedYamlFile(generatedYamlFiles[0].filename);
+      setSelectedYamlContent(generatedYamlFiles[0].content);
+    }
+  }, [generatedYamlFiles]);
   
   // Handle schema file selection
   const handleSchemaFileSelected = async (files) => {
@@ -144,6 +155,39 @@ const WriteYamlView = ({ onNext }) => {
     } finally {
       setIsGeneratingYaml(false);
     }
+  };
+  
+  // Handle YAML file selection change
+  const handleYamlFileChange = (event) => {
+    const filename = event.target.value;
+    setSelectedYamlFile(filename);
+    
+    // Find the corresponding content
+    const file = generatedYamlFiles.find(f => f.filename === filename);
+    if (file) {
+      setSelectedYamlContent(file.content);
+    }
+  };
+  
+  // Handle download of the selected YAML file
+  const handleDownloadYaml = () => {
+    if (!selectedYamlFile || !selectedYamlContent) return;
+    
+    const blob = new Blob([selectedYamlContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = selectedYamlFile;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    
+    addNotification({
+      type: 'success',
+      title: 'File Downloaded',
+      message: `${selectedYamlFile} has been downloaded`,
+    });
   };
   
   // Handle next button click
@@ -306,10 +350,67 @@ const WriteYamlView = ({ onNext }) => {
         {/* Step 3: Generated YAML Files */}
         {generatedYamlFiles && generatedYamlFiles.length > 0 && (
           <Grid item xs={12}>
-            <YamlViewer 
-              files={generatedYamlFiles} 
-              title="Generated Write YAML Files"
-            />
+            <Card variant="outlined">
+              <CardHeader 
+                title="Generated Write YAML Files" 
+                titleTypographyProps={{ variant: 'h6' }}
+                avatar={<DescriptionIcon color="primary" />}
+                action={
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<DescriptionIcon />}
+                    onClick={handleDownloadYaml}
+                    disabled={!selectedYamlFile}
+                  >
+                    Download
+                  </Button>
+                }
+              />
+              <Divider />
+              <CardContent>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth>
+                      <InputLabel id="yaml-file-select-label">Select YAML File</InputLabel>
+                      <Select
+                        labelId="yaml-file-select-label"
+                        id="yaml-file-select"
+                        value={selectedYamlFile}
+                        label="Select YAML File"
+                        onChange={handleYamlFileChange}
+                      >
+                        {generatedYamlFiles.map((file, index) => (
+                          <MenuItem key={index} value={file.filename}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <DescriptionIcon sx={{ mr: 1, fontSize: 20, color: 'primary.main' }} />
+                              {file.filename}
+                            </Box>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        bgcolor: 'grey.50', 
+                        maxHeight: '400px', 
+                        overflow: 'auto',
+                        fontFamily: 'monospace',
+                        fontSize: '0.85rem',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >
+                      {selectedYamlContent}
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
             
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
               <Button 

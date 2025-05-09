@@ -15,7 +15,11 @@ import {
   MenuItem,
   ListItemText,
   ListItemIcon,
-  CircularProgress
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  Paper
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -24,10 +28,11 @@ import StorageIcon from '@mui/icons-material/Storage';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import DoneIcon from '@mui/icons-material/Done';
 import ErrorIcon from '@mui/icons-material/Error';
+import DescriptionIcon from '@mui/icons-material/Description';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 
 import CommandGenerator from '../components/common/CommandGenerator';
 import ConsoleViewer from '../components/common/ConsoleViewer';
-import YamlViewer from '../components/common/YamlViewer';
 import { useSchemaContext } from '../context/SchemaContext';
 import { useNB5Context } from '../context/NB5Context';
 import { useAppContext } from '../context/AppContext';
@@ -49,7 +54,8 @@ const LoaderView = ({ onNext }) => {
   
   const { updateWorkflow } = useAppContext();
   
-  const [selectedYamlIndex, setSelectedYamlIndex] = useState(0);
+  const [selectedYamlFile, setSelectedYamlFile] = useState('');
+  const [selectedYamlContent, setSelectedYamlContent] = useState('');
   const [isGeneratingCommand, setIsGeneratingCommand] = useState(false);
   const [currentCommand, setCurrentCommand] = useState('');
   const [yamlFilePath, setYamlFilePath] = useState('');
@@ -61,14 +67,16 @@ const LoaderView = ({ onNext }) => {
     additional_params: 'cycles=5000000 threads=8'
   });
   
-  // Select the first YAML file when loaded
+  // Initialize selected YAML file when component mounts or files change
   useEffect(() => {
     if (generatedYamlFiles && generatedYamlFiles.length > 0) {
+      const firstFile = generatedYamlFiles[0];
+      setSelectedYamlFile(firstFile.filename);
+      setSelectedYamlContent(firstFile.content);
+      
       // Set the file path based on frontend-generated path (example)
       // In a real application, you would save the file on the server and use the actual path
-      const selectedFile = generatedYamlFiles[selectedYamlIndex];
-      const fileName = selectedFile.filename;
-      const filePath = `/tmp/${fileName}`;
+      const filePath = `/tmp/${firstFile.filename}`;
       setYamlFilePath(filePath);
       
       // Update form values with the file path
@@ -77,11 +85,53 @@ const LoaderView = ({ onNext }) => {
         yaml_file: filePath
       }));
     }
-  }, [generatedYamlFiles, selectedYamlIndex]);
+  }, [generatedYamlFiles]);
   
-  // Handle YAML tab change
-  const handleYamlTabChange = (event, newValue) => {
-    setSelectedYamlIndex(newValue);
+  // Handle YAML file selection change
+  const handleYamlFileChange = (event) => {
+    const filename = event.target.value;
+    setSelectedYamlFile(filename);
+    
+    // Find the corresponding content
+    const file = generatedYamlFiles.find(f => f.filename === filename);
+    if (file) {
+      setSelectedYamlContent(file.content);
+      
+      // Update the file path
+      const filePath = `/tmp/${filename}`;
+      setYamlFilePath(filePath);
+      
+      // Update form values with the file path
+      setFormValues(prev => ({
+        ...prev,
+        yaml_file: filePath
+      }));
+    }
+  };
+  
+  // Handle download of the selected YAML file
+  const handleDownloadYaml = () => {
+    if (!selectedYamlFile || !selectedYamlContent) return;
+    
+    const blob = new Blob([selectedYamlContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = selectedYamlFile;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    
+    // Update workflow step
+    updateWorkflow({
+      steps: [{
+        name: 'Download YAML',
+        status: 'completed',
+        timestamp: new Date(),
+        details: `Downloaded ${selectedYamlFile}`
+      }]
+    });
   };
   
   // Form fields for NB5 command generator
@@ -160,7 +210,7 @@ const LoaderView = ({ onNext }) => {
     try {
       // Create a temporary object with the YAML content and other parameters
       const execParams = {
-        yaml_content: generatedYamlFiles[selectedYamlIndex].content,
+        yaml_content: selectedYamlContent,
         host: values.host,
         datacenter: values.datacenter,
         keyspace: values.keyspace,
@@ -252,36 +302,61 @@ const LoaderView = ({ onNext }) => {
                 title="Select Write YAML File" 
                 titleTypographyProps={{ variant: 'h6' }}
                 avatar={<StorageIcon color="primary" />}
+                action={
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<CloudDownloadIcon />}
+                    onClick={handleDownloadYaml}
+                    disabled={!selectedYamlFile}
+                  >
+                    Download
+                  </Button>
+                }
               />
               <Divider />
               
-              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs 
-                  value={selectedYamlIndex} 
-                  onChange={handleYamlTabChange}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                >
-                  {generatedYamlFiles.map((file, index) => (
-                    <Tab 
-                      key={index}
-                      label={file.filename}
-                      icon={<StorageIcon />}
-                      iconPosition="start"
-                    />
-                  ))}
-                </Tabs>
-              </Box>
-              
-              <CardContent sx={{ bgcolor: 'grey.50', maxHeight: '300px', overflow: 'auto' }}>
-                <pre style={{ 
-                  margin: 0, 
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace',
-                  fontSize: '0.85rem'
-                }}>
-                  {generatedYamlFiles[selectedYamlIndex]?.content}
-                </pre>
+              <CardContent>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth>
+                      <InputLabel id="yaml-file-select-label">Select YAML File</InputLabel>
+                      <Select
+                        labelId="yaml-file-select-label"
+                        id="yaml-file-select"
+                        value={selectedYamlFile}
+                        label="Select YAML File"
+                        onChange={handleYamlFileChange}
+                      >
+                        {generatedYamlFiles.map((file, index) => (
+                          <MenuItem key={index} value={file.filename}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <DescriptionIcon sx={{ mr: 1, fontSize: 20, color: 'primary.main' }} />
+                              {file.filename}
+                            </Box>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        bgcolor: 'grey.50', 
+                        maxHeight: '300px', 
+                        overflow: 'auto',
+                        fontFamily: 'monospace',
+                        fontSize: '0.85rem',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >
+                      {selectedYamlContent}
+                    </Paper>
+                  </Grid>
+                </Grid>
               </CardContent>
             </Card>
           </Grid>
