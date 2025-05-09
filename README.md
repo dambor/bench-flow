@@ -2,7 +2,7 @@
 
 A web application for managing NoSQLBench workloads with Cassandra, combining schema parsing, YAML generation, data loading, and validation operations in a single interface.
 
-![Bench Flow](bench-flow.png)
+![Bench Flow](bench-flow-ui.png)
 
 ## Features
 
