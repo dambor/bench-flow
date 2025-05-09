@@ -52,7 +52,7 @@ const LoaderView = ({ onNext }) => {
     downloadScript
   } = useNB5Context();
   
-  const { updateWorkflow } = useAppContext();
+  const { updateWorkflow, addNotification } = useAppContext();
   
   const [selectedYamlFile, setSelectedYamlFile] = useState('');
   const [selectedYamlContent, setSelectedYamlContent] = useState('');
@@ -208,6 +208,16 @@ const LoaderView = ({ onNext }) => {
   // Handle command execution
   const handleExecuteCommand = async (command, values) => {
     try {
+      // Show a loading indicator or message
+      addNotification({
+        type: 'info',
+        title: 'Starting Execution',
+        message: 'Preparing to execute the NoSQLBench workload...',
+        duration: 3000
+      });
+      
+      console.log('Executing with YAML content:', selectedYamlContent ? `${selectedYamlContent.substring(0, 100)}...` : 'No YAML content');
+      
       // Create a temporary object with the YAML content and other parameters
       const execParams = {
         yaml_content: selectedYamlContent,
@@ -220,6 +230,7 @@ const LoaderView = ({ onNext }) => {
       
       // Execute the command
       const execution = await executeNB5(execParams);
+      console.log('Execution started:', execution);
       
       // Update workflow step
       updateWorkflow({
@@ -234,6 +245,15 @@ const LoaderView = ({ onNext }) => {
       return execution;
     } catch (error) {
       console.error('Error executing command:', error);
+      
+      // Add a more visible notification
+      addNotification({
+        type: 'error',
+        title: 'Execution Failed',
+        message: `Error: ${error.message || 'Unknown error occurred'}`,
+        duration: 5000
+      });
+      
       throw error;
     }
   };
@@ -263,6 +283,20 @@ const LoaderView = ({ onNext }) => {
     }
   };
   
+  // Add this function to ensure we properly access stdout/stderr
+  const getExecutionOutput = () => {
+    if (!activeExecution) return { stdout: [], stderr: [] };
+    
+    // Check if stdout/stderr are arrays
+    const stdout = Array.isArray(activeExecution.stdout) ? activeExecution.stdout : 
+                  (typeof activeExecution.stdout === 'string' ? activeExecution.stdout.split('\n') : []);
+    
+    const stderr = Array.isArray(activeExecution.stderr) ? activeExecution.stderr : 
+                  (typeof activeExecution.stderr === 'string' ? activeExecution.stderr.split('\n') : []);
+    
+    return { stdout, stderr };
+  };
+  
   // Handle next button click
   const handleNext = () => {
     if (onNext && typeof onNext === 'function') {
@@ -281,8 +315,7 @@ const LoaderView = ({ onNext }) => {
     activeExecution.status === 'completed';
   
   // Get stdout and stderr from the active execution
-  const stdout = activeExecution?.stdout || [];
-  const stderr = activeExecution?.stderr || [];
+  const { stdout, stderr } = getExecutionOutput();
   
   return (
     <Container maxWidth="xl">

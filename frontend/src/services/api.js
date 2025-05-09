@@ -8,24 +8,51 @@ const API_BASE_URL = 'http://localhost:8000/api';
  * Generic fetch wrapper with error handling
  */
 async function fetchWithErrorHandling(url, options = {}) {
+  console.log(`Making request to: ${url}`);
+  
   try {
     const response = await fetch(url, options);
+    
+    // Log response status
+    console.log(`Response status: ${response.status} ${response.statusText}`);
     
     if (!response.ok) {
       // Try to parse the error message from the response
       let errorMessage;
+      let errorDetails = null;
+      
       try {
         const errorData = await response.json();
         errorMessage = errorData.detail || `Server error: ${response.status}`;
+        errorDetails = errorData;
+        console.error('Error response data:', errorData);
       } catch (e) {
         errorMessage = `Server error: ${response.status}`;
+        console.error('Could not parse error response as JSON');
       }
-      throw new Error(errorMessage);
+      
+      const error = new Error(errorMessage);
+      error.status = response.status;
+      error.details = errorDetails;
+      throw error;
     }
     
     // Check if response is empty
     const text = await response.text();
-    return text ? JSON.parse(text) : {};
+    if (!text) {
+      console.log('Empty response from server');
+      return {};
+    }
+    
+    try {
+      const jsonData = JSON.parse(text);
+      console.log('Successful response data:', jsonData);
+      return jsonData;
+    } catch (e) {
+      console.error('Error parsing JSON response:', e);
+      console.log('Raw response text:', text);
+      throw new Error('Invalid JSON response from server');
+    }
   } catch (error) {
     console.error('API call failed:', error);
     throw error;
@@ -35,6 +62,7 @@ async function fetchWithErrorHandling(url, options = {}) {
 /**
  * Create FormData from an object
  */
+// Enhanced createFormData function to better handle YAML content
 function createFormData(data) {
   const formData = new FormData();
   
@@ -43,6 +71,12 @@ function createFormData(data) {
     if (value instanceof File) {
       formData.append(key, value);
     } 
+    // Special handling for yaml_content to ensure it's treated properly
+    else if (key === 'yaml_content' && typeof value === 'string') {
+      // Create a blob to ensure proper submission as a file
+      const yamlBlob = new Blob([value], { type: 'text/plain' });
+      formData.append(key, yamlBlob, 'content.yaml');
+    }
     // Handle arrays or objects by converting to JSON string
     else if (typeof value === 'object' && value !== null) {
       formData.append(key, JSON.stringify(value));
@@ -55,6 +89,7 @@ function createFormData(data) {
   
   return formData;
 }
+
 
 // Schema Parser API
 export const schemaApi = {
@@ -170,6 +205,9 @@ export const nb5Api = {
   executeNb5: async (params) => {
     const formData = createFormData(params);
     
+    // Log the keys being sent (but not the actual content for security)
+    console.log('Sending form data keys:', Object.keys(params));
+    
     return fetchWithErrorHandling(`${API_BASE_URL}/nb5/execute`, {
       method: 'POST',
       body: formData
@@ -178,7 +216,25 @@ export const nb5Api = {
   
   // Get execution status
   getExecutionStatus: async (executionId) => {
-    return fetchWithErrorHandling(`${API_BASE_URL}/nb5/status/${executionId}`);
+    const maxRetries = 3;
+    let retries = 0;
+    
+    while (retries < maxRetries) {
+      try {
+        return await fetchWithErrorHandling(`${API_BASE_URL}/nb5/status/${executionId}`);
+      } catch (error) {
+        retries++;
+        console.log(`Retry ${retries}/${maxRetries} for execution status ${executionId}`);
+        
+        // Only throw if we've exhausted all retries
+        if (retries >= maxRetries) {
+          throw error;
+        }
+        
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+      }
+    }
   },
   
   // Terminate execution

@@ -194,7 +194,7 @@ export const AppProvider = ({ children }) => {
       type: 'success',
       title: 'Workflow Started',
       message: `New workflow "${name}" has been created`,
-      duration: 3000,
+      duration: 2000,
     });
     
     return newWorkflow;
@@ -224,7 +224,7 @@ export const AppProvider = ({ children }) => {
       type: 'info',
       title: 'Workflow Resumed',
       message: `Resumed workflow: ${workflow.name}`,
-      duration: 3000,
+      duration: 2000,
     });
     
     return resumedWorkflow;
@@ -290,7 +290,7 @@ export const AppProvider = ({ children }) => {
           type: 'success',
           title: 'Workflow Deleted',
           message: 'The workflow has been deleted successfully.',
-          duration: 3000,
+          duration: 2000,
         });
       } catch (error) {
         console.error('Error updating workflows in storage:', error);

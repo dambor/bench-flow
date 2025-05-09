@@ -29,7 +29,7 @@ export const NB5Provider = ({ children }) => {
       const result = await nb5Api.validate();
       setIsValidated(result.valid);
       setNB5Path(result.path);
-      /*
+      
       if (result.valid) {
         addNotification({
           type: 'success',
@@ -43,7 +43,7 @@ export const NB5Provider = ({ children }) => {
           message: `NB5 JAR not found at ${result.path}`,
           persistent: true,
         });
-      }*/
+      }
 
       if (!result.valid) {
         addNotification({
@@ -68,13 +68,13 @@ export const NB5Provider = ({ children }) => {
     try {
       const result = await nb5Api.generateCommand(params);
       setCurrentCommand(result.command);
-      /*
+      
       addNotification({
         type: 'info',
         title: 'Command Generated',
         message: 'NB5 command has been generated',
       });
-      */
+      
       return result;
     } catch (error) {
       setError(error);
@@ -85,6 +85,12 @@ export const NB5Provider = ({ children }) => {
   // Execute a NB5 command with YAML content
   const executeNB5 = async (params) => {
     try {
+      // Log params for debugging (remove sensitive data)
+      console.log('Executing NB5 with params:', {
+        ...params,
+        yaml_content: params.yaml_content ? `${params.yaml_content.substring(0, 50)}...` : 'No content',
+      });
+      
       // Update workflow step - starting
       updateWorkflow({
         steps: [{
@@ -95,31 +101,47 @@ export const NB5Provider = ({ children }) => {
         }]
       });
       
+      // Ensure yaml_content is properly formatted
+      if (params.yaml_content) {
+        // Remove any problematic characters or ensure proper encoding
+        params.yaml_content = params.yaml_content.trim();
+      }
+      
       const result = await nb5Api.executeNb5(params);
+      console.log('Execution result from backend:', result);
       
-      // Start polling for status updates
-      startStatusPolling(result.execution_id);
+      if (!result || !result.execution_id) {
+        throw new Error('No execution ID returned from the server');
+      }
       
-      // Create a new execution record
+      // Create a new execution record with initial stdout/stderr arrays
       const execution = {
         id: result.execution_id,
-        command: result.command,
+        command: result.command || '',
         status: 'running',
         timestamp: new Date(),
+        stdout: [],
+        stderr: [],
+        is_running: true
       };
       
       // Update executions list
       setExecutions(prev => [execution, ...prev]);
       setActiveExecution(execution);
-      /*
+      
+      // Start polling for status updates
+      startStatusPolling(result.execution_id);
+      
       addNotification({
         type: 'success',
         title: 'Execution Started',
         message: `NB5 execution started with ID: ${result.execution_id}`,
-      });*/
+        duration: 3000
+      });
       
       return execution;
     } catch (error) {
+      console.error('NB5 Execution error:', error);
       setError(error);
       
       // Update workflow step - failed
@@ -135,9 +157,11 @@ export const NB5Provider = ({ children }) => {
       throw error;
     }
   };
-  
+
   // Start polling for status updates for a specific execution
   const startStatusPolling = (executionId) => {
+    console.log(`Starting status polling for execution: ${executionId}`);
+    
     // Clear any existing interval
     if (pollingInterval) {
       clearInterval(pollingInterval);
@@ -146,24 +170,36 @@ export const NB5Provider = ({ children }) => {
     // Set up a new polling interval
     const interval = setInterval(async () => {
       try {
+        console.log(`Polling status for execution: ${executionId}`);
         const status = await nb5Api.getExecutionStatus(executionId);
+        console.log(`Status update for ${executionId}:`, status);
+        
+        // Format stdout and stderr if they're not arrays
+        let formattedStatus = {
+          ...status,
+          stdout: Array.isArray(status.stdout) ? status.stdout : 
+                  (typeof status.stdout === 'string' ? status.stdout.split('\n') : []),
+          stderr: Array.isArray(status.stderr) ? status.stderr : 
+                  (typeof status.stderr === 'string' ? status.stderr.split('\n') : [])
+        };
         
         // Update the execution in the list
         setExecutions(prev => 
           prev.map(exec => 
             exec.id === executionId 
-              ? { ...exec, ...status, lastUpdated: new Date() } 
+              ? { ...exec, ...formattedStatus, lastUpdated: new Date() } 
               : exec
           )
         );
         
         // Update the active execution if it's the current one
         if (activeExecution && activeExecution.id === executionId) {
-          setActiveExecution(prev => ({ ...prev, ...status, lastUpdated: new Date() }));
+          setActiveExecution(prev => ({ ...prev, ...formattedStatus, lastUpdated: new Date() }));
         }
         
         // If the execution is no longer running, stop polling
         if (!status.is_running) {
+          console.log(`Execution ${executionId} completed with status: ${status.status}`);
           clearInterval(interval);
           setPollingInterval(null);
           
@@ -180,16 +216,17 @@ export const NB5Provider = ({ children }) => {
           });
           
           // Send notification about completion
-          /*addNotification({
+          addNotification({
             type: status.status === 'completed' ? 'success' : 'error',
             title: status.status === 'completed' ? 'Execution Complete' : 'Execution Failed',
             message: status.status === 'completed' 
               ? 'NB5 execution completed successfully' 
               : `NB5 execution ${status.status}`,
-          });*/
+            duration: 4000
+          });
         }
       } catch (error) {
-        console.error('Error polling execution status:', error);
+        console.error(`Error polling status for execution ${executionId}:`, error);
         // Don't stop polling on temporary errors
       }
     }, 2000); // Poll every 2 seconds
@@ -295,13 +332,13 @@ export const NB5Provider = ({ children }) => {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      /*
+      
       addNotification({
         type: 'success',
         title: 'Script Downloaded',
         message: `${filename} has been downloaded`,
       });
-      */
+      
       return true;
     } catch (error) {
       setError(error);
