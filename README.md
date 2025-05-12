@@ -22,7 +22,7 @@ A web application for managing NoSQLBench workloads with Cassandra, combining sc
 - pip
 - uvicorn
 
-## Project Structure
+## Project Structure and Architecture
 
 ```
 nosqlbench-flow/
@@ -39,6 +39,8 @@ nosqlbench-flow/
     │   └── main.jsx     # Entry point
     └── ...
 ```
+
+![diagram](diagram.png)
 
 ## Installation
 
