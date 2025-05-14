@@ -1,123 +1,180 @@
-# NoSQLBench Flow
+# kubectl-ai
 
-A web application for managing NoSQLBench workloads with Cassandra, combining schema parsing, YAML generation, data loading, and validation operations in a single interface.
+kubectl-ai is an AI powered kubernetes agent that runs in your terminal.
 
-![Bench Flow](bench-flow-ui.png)
+![kubectl-ai demo GIF using: kubectl-ai "how's nginx app doing in my cluster"](./.github/kubectl-ai.gif)
 
-## Features
+## Quick Start
 
-- Parse Cassandra CQL schemas
-- Generate NoSQLBench YAML files for write operations
-- Run NoSQLBench data loading operations
-- Export data using DSBulk
-- Generate read YAML files for validation
-- Run read operations to validate data consistency
-- Prepare for CDM migration
+First, ensure that kubectl is installed and configured.
 
-## System Requirements
+### Installation
 
-- Node.js (v14+)
-- npm (v6+)
-- Python (v3.8+)
-- pip
-- uvicorn
+1. Download the latest release from the [releases page](https://github.com/GoogleCloudPlatform/kubectl-ai/releases/latest) for your target machine.
 
-## Project Structure and Architecture
+2. Untar the release, make the binary executable and move it to a directory in your $PATH (as shown below).
 
-```
-nosqlbench-flow/
-├── backend/          # FastAPI backend
-│   ├── main.py       # Main API server
-│   └── ...
-└── frontend/         # React frontend
-    ├── src/
-    │   ├── components/  # Reusable UI components
-    │   ├── context/     # Context providers
-    │   ├── services/    # API services
-    │   ├── views/       # Page components
-    │   ├── App.jsx      # Main application component
-    │   └── main.jsx     # Entry point
-    └── ...
+```shell
+tar -zxvf kubectl-ai_Darwin_arm64.tar.gz
+chmod a+x kubectl-ai
+sudo mv kubectl-ai /usr/local/bin/
 ```
 
-![diagram](diagram.png)
+### Usage
 
-## Installation
+#### Using Gemini (Default)
 
-You can use the included Makefile to easily install and run the application:
+Set your Gemini API key as an environment variable. If you don't have a key, get one from [Google AI Studio](https://aistudio.google.com).
 
 ```bash
-# Check if your system meets requirements
-make check-reqs
+export GEMINI_API_KEY=your_api_key_here
+kubectl-ai
 
-# Install both frontend and backend dependencies
-make setup
+# Use different gemini model
+kubectl-ai --model gemini-2.5-pro-exp-03-25
 
-# Or install them separately
-make setup-fe   # Frontend only
-make setup-be   # Backend only
+# Use 2.5 flash (faster) model
+kubectl-ai --quiet --model gemini-2.5-flash-preview-04-17 "check logs for nginx app in hello namespace"
 ```
 
-## Running the Application
+#### Using AI models running locally (ollama or llamacpp)
 
-To start both frontend and backend servers:
+You can use `kubectl-ai` with AI models running locally. `kubectl-ai` supports [ollama](https://ollama.com/) and [llama.cpp](https://github.com/ggml-org/llama.cpp) to use the AI models running locally.
+
+An example of using Google's `gemma3` model with `ollama`:
+
+```shell
+# assuming ollama is already running and you have pulled one of the gemma models
+# ollama pull gemma3:12b-it-qat
+
+# enable-tool-use-shim because models require special prompting to enable tool calling
+kubectl-ai --llm-provider ollama --model gemma3:12b-it-qat --enable-tool-use-shim
+
+# you can use `models` command to discover the locally available models
+>> models
+```
+
+#### Using Grok
+
+You can use X.AI's Grok model by setting your X.AI API key:
 
 ```bash
-make start
+export GROK_API_KEY=your_xai_api_key_here
+kubectl-ai --llm-provider=grok --model=grok-3-beta
 ```
 
-This will start:
-- Backend FastAPI server at http://localhost:8000
-- Frontend development server at http://localhost:3000
+#### Using Azure OpenAI
 
-You can also start them individually:
+You can also use Azure OpenAI deployment by setting your OpenAI API key and specifying the provider:
 
 ```bash
-make start-fe   # Start frontend only
-make start-be   # Start backend only
+export AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
+export AZURE_OPENAI_ENDPOINT=https://your_azure_openai_endpoint_here
+kubectl-ai --llm-provider=azopenai --model=your_azure_openai_deployment_name_here
+# or
+az login
+kubectl-ai --llm-provider=openai://your_azure_openai_endpoint_here --model=your_azure_openai_deployment_name_here
 ```
 
-## Building for Production
+#### Using OpenAI
 
-To build the frontend for production:
+You can also use OpenAI models by setting your OpenAI API key and specifying the provider:
 
 ```bash
-make build
+export OPENAI_API_KEY=your_openai_api_key_here
+kubectl-ai --llm-provider=openai --model=gpt-4.1
 ```
 
-The output will be in the `frontend/dist` directory.
+#### Using OpenAI Compatible API
+For example, you can use aliyun qwen-xxx module as follows
+```bash
+export OPENAI_API_KEY=your_openai_api_key_here
+export OPENAI_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
+kubectl-ai --llm-provider=openai --model=qwen-plus
+```
 
-## Cleaning Up
+* Note: `kubectl-ai` supports AI models from `gemini`, `vertexai`, `azopenai`, `openai`, `grok` and local LLM providers such as `ollama` and `llamacpp`.
 
-To clean up node_modules, build artifacts, and Python cache files:
+Run interactively:
+
+```shell
+kubectl-ai
+```
+
+The interactive mode allows you to have a chat with `kubectl-ai`, asking multiple questions in sequence while maintaining context from previous interactions. Simply type your queries and press Enter to receive responses. To exit the interactive shell, type `exit` or press Ctrl+C.
+
+Or, run with a task as input:
+
+```shell
+kubectl-ai -quiet "fetch logs for nginx app in hello namespace"
+```
+
+Combine it with other unix commands:
+
+```shell
+kubectl-ai < query.txt
+# OR
+echo "list pods in the default namespace" | kubectl-ai
+```
+
+You can even combine a positional argument with stdin input. The positional argument will be used as a prefix to the stdin content:
+
+```shell
+cat error.log | kubectl-ai "explain the error"
+```
+
+## Extras
+
+You can use the following special keywords for specific actions:
+
+* `model`: Display the currently selected model.
+* `models`: List all available models.
+* `version`: Display the `kubectl-ai` version.
+* `reset`: Clear the conversational context.
+* `clear`: Clear the terminal screen.
+* `exit` or `quit`: Terminate the interactive shell (Ctrl+C also works).
+
+### Invoking as kubectl plugin
+
+Use it via the `kubectl` plug interface like this: `kubectl ai`.  kubectl will find `kubectl-ai` as long as it's in your PATH.  For more information about plugins please see: https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/
+
+
+### Examples
 
 ```bash
-make clean
+# Get information about pods in the default namespace
+kubectl-ai -quiet "show me all pods in the default namespace"
+
+# Create a new deployment
+kubectl-ai -quiet "create a deployment named nginx with 3 replicas using the nginx:latest image"
+
+# Troubleshoot issues
+kubectl-ai -quiet "double the capacity for the nginx app"
+
+# Using Azure OpenAI instead of Gemini
+kubectl-ai --llm-provider=azopenai --model=your_azure_openai_deployment_name_here -quiet "scale the nginx deployment to 5 replicas"
+
+# Using OpenAI instead of Gemini
+kubectl-ai --llm-provider=openai --model=gpt-4.1 -quiet "scale the nginx deployment to 5 replicas"
 ```
 
-## Backend Configuration
+The `kubectl-ai` will process your query, execute the appropriate kubectl commands, and provide you with the results and explanations.
 
-The backend expects DSBulk and NoSQLBench JAR files to be available. By default, it looks for:
+## k8s-bench
 
-- DSBulk JAR at `~/workspace/dsbulk-1.11.0.jar`
-- NoSQLBench JAR at `~/workspace/nb5.jar`
+kubectl-ai project includes [k8s-bench](./k8s-bench/README.md) - a benchmark to evaluate performance of different LLM models on kubernetes related tasks. Here is a summary from our last run:
 
-You can verify the status of these files in the Settings page of the application.
+| Model | Success | Fail |
+|-------|---------|------|
+| gemini-2.5-flash-preview-04-17 | 10 | 0 |
+| gemini-2.5-pro-preview-03-25 | 10 | 0 |
+| gemma-3-27b-it | 8 | 2 |
+| **Total** | 28 | 2 |
 
-## API Endpoints
+See [full report](./k8s-bench.md) for more details.
 
-The backend provides several API endpoints:
+---
 
-- `/api/parse-schema` - Parse CQL schema files
-- `/api/generate-yaml` - Generate NoSQLBench YAML files
-- `/api/dsbulk/*` - DSBulk operations
-- `/api/nb5/*` - NoSQLBench operations
-- `/api/health` - Health check endpoint
-
-## Development
-
-The frontend proxy is configured to forward all `/api/*` requests to the backend server, so you don't need to worry about CORS issues during development.
-
-## License
-
-[MIT License](LICENSE)
+*Note: This is not an officially supported Google product. This project is not
+eligible for the [Google Open Source Software Vulnerability Rewards
+Program](https://bughunters.google.com/open-source-security).*
