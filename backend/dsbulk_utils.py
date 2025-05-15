@@ -1,15 +1,29 @@
-# backend/dsbulk_utils.py
 import os
 import subprocess
 from typing import Dict, List, Optional
+from pathlib import Path
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("dsbulk_manager")
 
 class DSBulkManager:
     def __init__(self, dsbulk_path: str = None):
-        # Default to a common location if not specified
-        self.dsbulk_path = dsbulk_path or os.path.expanduser("~/workspace/dsbulk-1.11.0.jar")
+        # Use the provided path or default to a common location
+        self.dsbulk_path = dsbulk_path or str(Path(os.path.dirname(os.path.abspath(__file__))) / f"dsbulk-1.11.0.jar")
         
     def validate_dsbulk_path(self) -> bool:
-        """Validate that the DSBulk JAR file exists"""
+        """
+        Validate that the DSBulk JAR file exists
+        
+        Returns:
+            bool: True if the file exists, False otherwise
+        """
+        # Don't need to download here - that happens in main.py
         return os.path.exists(self.dsbulk_path)
     
     def generate_unload_command(self, 
@@ -80,6 +94,10 @@ class DSBulkManager:
     def execute_command(self, command: str) -> Dict:
         """Execute a DSBulk command and return results"""
         try:
+            # Make sure dsbulk.jar exists before executing
+            if not self.validate_dsbulk_path():
+                raise Exception(f"DSBulk JAR file not found at {self.dsbulk_path}")
+            
             # Execute the command and capture output
             result = subprocess.run(command, shell=True, check=True, 
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -91,9 +109,18 @@ class DSBulkManager:
                 "stderr": result.stderr
             }
         except subprocess.CalledProcessError as e:
+            logger.error(f"DSBulk command execution failed: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "stdout": e.stdout if hasattr(e, 'stdout') else "",
                 "stderr": e.stderr if hasattr(e, 'stderr') else ""
+            }
+        except Exception as e:
+            logger.error(f"Error during DSBulk command execution: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "stdout": "",
+                "stderr": f"Error: {str(e)}"
             }

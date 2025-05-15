@@ -115,6 +115,7 @@ dmypy.json
 
 # Project specific
 nb5.jar
+dsbulk*jar
 sessions/
 logs
 .DS_Store

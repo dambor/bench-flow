@@ -48,7 +48,7 @@ run-fe:
 .PHONY: run-be
 run-be:
 	@echo "Starting backend server..."
-	cd backend && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+	cd backend && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
 
 # Build frontend
 .PHONY: build

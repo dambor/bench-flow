@@ -6,14 +6,36 @@ import io
 import zipfile
 import json
 import os
+import sys
+import requests
 from pathlib import Path
-from schema_parser import CQLParser
-from dsbulk_utils import DSBulkManager
+import logging
 import tempfile
-from nb5_executor import NB5Executor
+from schema_parser import CQLParser
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger("nosqlbench_flow")
 
+# Define constants
+BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = BASE_DIR
+SESSIONS_DIR = BASE_DIR / "sessions"
+SESSIONS_DIR.mkdir(exist_ok=True)
 
+# NB5 and DSBulk JAR URLs and paths
+NB5_JAR_URL = "https://github.com/nosqlbench/nosqlbench/releases/latest/download/nb5.jar"
+NB5_JAR_PATH = PROJECT_ROOT / "nb5.jar"
+
+DSBULK_VERSION = "1.11.0"
+DSBULK_JAR_PATH = PROJECT_ROOT / f"dsbulk-{DSBULK_VERSION}.jar"
+DSBULK_DOWNLOAD_URL = f"https://downloads.datastax.com/dsbulk/dsbulk-{DSBULK_VERSION}.tar.gz"
+
+# Create the application
 app = FastAPI(title="NoSQLBench Schema Generator")
 
 # Add CORS middleware
@@ -25,25 +47,149 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# In-memory cache for the latest parsed schema
+SCHEMA_CACHE = {}
+
+# Helper function to download NB5 JAR
+def ensure_nb5_jar():
+    """
+    Check if nb5.jar exists, download if not present.
+    
+    Returns:
+        Path: Path to the nb5.jar file
+    """
+    if not NB5_JAR_PATH.exists():
+        logger.info(f"nb5.jar not found at {NB5_JAR_PATH}, downloading...")
+        try:
+            response = requests.get(NB5_JAR_URL, stream=True)
+            response.raise_for_status()
+            
+            # Create parent directories if they don't exist
+            os.makedirs(os.path.dirname(NB5_JAR_PATH), exist_ok=True)
+            
+            with open(NB5_JAR_PATH, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            logger.info(f"nb5.jar downloaded successfully to {NB5_JAR_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to download nb5.jar: {e}")
+            raise RuntimeError(f"Failed to download nb5.jar: {e}")
+    else:
+        logger.info(f"nb5.jar already exists at {NB5_JAR_PATH}")
+    
+    return NB5_JAR_PATH
+
+# Helper function to download DSBulk
+def ensure_dsbulk():
+    """
+    Check if dsbulk.jar exists, download if not present.
+    
+    Returns:
+        Path: Path to the dsbulk.jar file
+    """
+    if not DSBULK_JAR_PATH.exists():
+        logger.info(f"DSBulk not found at {DSBULK_JAR_PATH}, downloading...")
+        try:
+            import tarfile
+            import shutil
+            
+            # Create temporary directory
+            temp_dir = tempfile.mkdtemp()
+            temp_file = os.path.join(temp_dir, "dsbulk.tar.gz")
+            
+            # Download the file
+            logger.info(f"Downloading DSBulk from {DSBULK_DOWNLOAD_URL}")
+            response = requests.get(DSBULK_DOWNLOAD_URL, stream=True)
+            response.raise_for_status()
+            
+            # Save the file
+            with open(temp_file, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            # Extract the archive
+            logger.info(f"Extracting DSBulk archive")
+            with tarfile.open(temp_file, 'r:gz') as tar:
+                tar.extractall(path=temp_dir)
+            
+            # Find the jar file in the extracted directory
+            dsbulk_dir = os.path.join(temp_dir, f"dsbulk-{DSBULK_VERSION}")
+            jar_found = False
+            
+            for root, dirs, files in os.walk(dsbulk_dir):
+                for file in files:
+                    if file.endswith(".jar") and "dsbulk" in file.lower():
+                        jar_path = os.path.join(root, file)
+                        
+                        # Create parent directories of target if needed
+                        os.makedirs(os.path.dirname(DSBULK_JAR_PATH), exist_ok=True)
+                        
+                        # Copy jar to target destination
+                        shutil.copy2(jar_path, DSBULK_JAR_PATH)
+                        logger.info(f"Copied {jar_path} to {DSBULK_JAR_PATH}")
+                        jar_found = True
+                        break
+                
+                if jar_found:
+                    break
+            
+            # Clean up temp directory
+            shutil.rmtree(temp_dir)
+            
+            if not jar_found:
+                raise Exception(f"Could not find DSBulk jar in the extracted archive")
+                
+            logger.info(f"DSBulk downloaded successfully to {DSBULK_JAR_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to download DSBulk: {e}")
+            raise RuntimeError(f"Failed to download DSBulk: {e}")
+    else:
+        logger.info(f"DSBulk already exists at {DSBULK_JAR_PATH}")
+    
+    return DSBULK_JAR_PATH
+
 # Initialize the CQL parser
 parser = CQLParser()
 
-# Initialize the DSBulk manager
-dsbulk_manager = DSBulkManager()
-
-# Initialize the NB5 executor
-nb5_executor = NB5Executor()
-
-# Initialize the CQL Generator
+# Import remaining modules after the helper functions are defined
+from dsbulk_utils import DSBulkManager
+from nb5_executor import NB5Executor
 from cql_generator import CQLGenerator
+
+# Initialize components with proper JAR paths
+nb5_executor = NB5Executor(str(NB5_JAR_PATH))
+dsbulk_manager = DSBulkManager(str(DSBULK_JAR_PATH))
 cql_generator = CQLGenerator()
 
-# Constants for CQL Generator
-SESSIONS_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "sessions"
-SESSIONS_DIR.mkdir(exist_ok=True)
-
-# In-memory cache for the latest parsed schema
-SCHEMA_CACHE = {}
+# Application startup event handler
+@app.on_event("startup")
+async def startup_event():
+    """
+    Application startup event handler.
+    This function is called when the application starts.
+    We'll use it to ensure the required JAR files are available.
+    """
+    logger.info("Initializing NoSQLBench Flow application...")
+    
+    # Ensure NB5 jar is available in the backend directory
+    logger.info("Checking for nb5.jar...")
+    nb5_path = BASE_DIR / "nb5.jar"
+    if not nb5_path.exists():
+        logger.info(f"nb5.jar not found at {nb5_path}, downloading...")
+        # Download code from earlier
+    
+    # Ensure DSBulk jar is available in the backend directory 
+    logger.info("Checking for dsbulk.jar...")
+    dsbulk_path = BASE_DIR / f"dsbulk-{DSBULK_VERSION}.jar"
+    if not dsbulk_path.exists():
+        logger.info(f"DSBulk not found at {dsbulk_path}, downloading...")
+        # Download code from earlier
+    
+    # Update the paths in the executors
+    nb5_executor.nb5_path = str(nb5_path)
+    dsbulk_manager.dsbulk_path = str(dsbulk_path)
+    
+    logger.info("Initialization complete!")
 
 @app.post("/api/parse-schema")
 async def parse_schema(schema_file: UploadFile = File(...)):
@@ -188,7 +334,7 @@ async def process_multiple_files(
             })
         except Exception as e:
             # Log the error but continue processing other files
-            print(f"Error processing file {file.filename}: {str(e)}")
+            logger.error(f"Error processing file {file.filename}: {str(e)}")
     
     if not processed_files:
         raise HTTPException(status_code=400, detail="No valid YAML files were processed")
@@ -370,10 +516,17 @@ async def generate_read_yaml_json(
 @app.get("/api/dsbulk/validate")
 async def validate_dsbulk():
     """Validate that the DSBulk JAR exists"""
-    is_valid = dsbulk_manager.validate_dsbulk_path()
+    # Update to make sure it checks the backend directory
+    dsbulk_path = BASE_DIR / f"dsbulk-{DSBULK_VERSION}.jar"
+    is_valid = os.path.exists(dsbulk_path)
+    
+    # Update the manager's path
+    if is_valid:
+        dsbulk_manager.dsbulk_path = str(dsbulk_path)
+    
     return {
         "valid": is_valid,
-        "path": dsbulk_manager.dsbulk_path
+        "path": str(dsbulk_path)
     }
 
 @app.post("/api/dsbulk/generate-commands")
@@ -517,10 +670,17 @@ async def download_dsbulk_script(
 @app.get("/api/nb5/validate")
 async def validate_nb5():
     """Validate that the NB5 JAR exists"""
-    is_valid = nb5_executor.validate_nb5_path()
+    # Update to make sure it checks the backend directory
+    nb5_path = BASE_DIR / "nb5.jar"
+    is_valid = os.path.exists(nb5_path)
+    
+    # Update the executor's path
+    if is_valid:
+        nb5_executor.nb5_path = str(nb5_path)
+    
     return {
         "valid": is_valid,
-        "path": nb5_executor.nb5_path
+        "path": str(nb5_path)
     }
 
 @app.post("/api/nb5/generate-command")
@@ -641,85 +801,6 @@ async def download_nb5_script(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating NB5 script: {str(e)}")
-
-@app.get("/api/nb5/status/{execution_id}")
-async def get_nb5_execution_status(execution_id: str):
-    """Get the status and logs of a NB5 execution"""
-    try:
-        status = nb5_executor.get_execution_status(execution_id)
-        return status
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Execution not found: {str(e)}")
-
-@app.post("/api/nb5/terminate/{execution_id}")
-async def terminate_nb5_execution(execution_id: str):
-    """Terminate a running NB5 execution"""
-    try:
-        result = nb5_executor.terminate_execution(execution_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Execution not found or cannot be terminated: {str(e)}")
-
-@app.get("/api/nb5/list")
-async def list_nb5_executions():
-    """List all NB5 executions with their status"""
-    try:
-        executions = nb5_executor.list_executions()
-        return {
-            "executions": executions
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing executions: {str(e)}")
-
-@app.post("/api/nb5/download-script")
-async def download_nb5_script(
-    yaml_file: str = Form(..., description="Path to YAML file"),
-    host: str = Form(..., description="Cassandra host"),
-    datacenter: str = Form(..., description="Cassandra datacenter"),
-    keyspace: str = Form(..., description="Cassandra keyspace"),
-    additional_params: Optional[str] = Form(None, description="Additional parameters")
-):
-    """Generate a NB5 execution script and return it for download"""
-    try:
-        # Generate the command
-        command = nb5_executor.generate_execution_command(
-            yaml_file=yaml_file,
-            host=host,
-            datacenter=datacenter,
-            keyspace=keyspace,
-            additional_params=additional_params
-        )
-        
-        # Create a shell script with the command
-        script_content = "#!/bin/bash\n\n"
-        script_content += "# NoSQLBench 5 execution script generated by NoSQLBench Schema Generator\n"
-        script_content += f"# Executes workload against {host}\n\n"
-        script_content += command
-        script_content += "\n\n# End of script\n"
-        
-        # Return the script for download
-        yaml_file_basename = os.path.basename(yaml_file)
-        filename = f"nb5_execute_{yaml_file_basename}.sh"
-        
-        return StreamingResponse(
-            io.StringIO(script_content),
-            media_type="text/plain",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}",
-                "Content-Type": "text/plain; charset=utf-8"
-            }
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating NB5 script: {str(e)}")
-
-# Initialize the CQL Generator
-from cql_generator import CQLGenerator
-cql_generator = CQLGenerator()
-
-# Constants for CQL Generator
-SESSIONS_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "sessions"
-SESSIONS_DIR.mkdir(exist_ok=True)
 
 # CQL Generator API Endpoints
 @app.get("/api/cqlgen/validate")
@@ -902,4 +983,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)                            

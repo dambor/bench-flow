@@ -1,4 +1,3 @@
-# backend/nb5_executor.py
 import os
 import subprocess
 import tempfile
@@ -6,16 +5,31 @@ import threading
 import time
 import json
 from typing import Dict, List, Optional, Tuple, Any
+from pathlib import Path
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("nb5_executor")
 
 class NB5Executor:
     def __init__(self, nb5_path: str = None):
         # Default to a common location if not specified
-        self.nb5_path = nb5_path or os.path.expanduser("~/workspace/nb5.jar")
+        self.nb5_path = nb5_path or str(Path(os.path.dirname(os.path.abspath(__file__))) / "nb5.jar")
         self.active_executions = {}
         self.execution_logs = {}
         
     def validate_nb5_path(self) -> bool:
-        """Validate that the NB5 JAR file exists"""
+        """
+        Validate that the NB5 JAR file exists.
+        
+        Returns:
+            bool: True if the file exists, False otherwise
+        """
+        # Don't need to download here - that happens in main.py
         return os.path.exists(self.nb5_path)
     
     def generate_execution_command(self,
@@ -53,6 +67,10 @@ class NB5Executor:
             Dict with execution_id and command
         """
         try:
+            # Make sure nb5.jar exists
+            if not self.validate_nb5_path():
+                raise Exception(f"NB5 JAR file not found at {self.nb5_path}")
+            
             # Create a temporary file for the YAML content
             with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_yaml:
                 temp_yaml.write(yaml_content)
@@ -154,7 +172,7 @@ class NB5Executor:
                 if execution_id in self.execution_logs:
                     self.execution_logs[execution_id][stream_type].append(line.rstrip())
         except Exception as e:
-            print(f"Error capturing {stream_type} for execution {execution_id}: {str(e)}")
+            logger.error(f"Error capturing {stream_type} for execution {execution_id}: {str(e)}")
         finally:
             stream.close()
     
@@ -218,7 +236,7 @@ class NB5Executor:
             cleanup_thread.start()
             
         except Exception as e:
-            print(f"Error monitoring process for execution {execution_id}: {str(e)}")
+            logger.error(f"Error monitoring process for execution {execution_id}: {str(e)}")
             if execution_id in self.execution_logs:
                 self.execution_logs[execution_id]['status'] = 'error'
                 self.execution_logs[execution_id]['stderr'].append(f"Error monitoring process: {str(e)}")
