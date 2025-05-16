@@ -1,3 +1,4 @@
+// Modified LoaderView.jsx with "Execute Workload" button removed
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -46,17 +47,25 @@ const LoaderView = ({ onNext }) => {
   // State for managing YAML files
   const [yamlFile, setYamlFile] = useState(null);
   const [yamlContent, setYamlContent] = useState('');
-  const [isUploadMode, setIsUploadMode] = useState(false); // Set to false to prioritize using the shared YAML
+  const [isUploadMode, setIsUploadMode] = useState(false);
   
   // State for command generation and execution
   const [isGeneratingCommand, setIsGeneratingCommand] = useState(false);
   const [currentCommand, setCurrentCommand] = useState('');
+  
+  // Determine the full path dynamically
+  const getDefaultYamlPath = () => {
+    if (generatedYaml && generatedYaml.sessionId && generatedYaml.filename) {
+      return `/Users/glenio.borges/workspace/bench-flow/backend/sessions/${generatedYaml.sessionId}/${generatedYaml.filename}`;
+    }
+    return '/Users/glenio.borges/workspace/bench-flow/backend/sessions/output.yaml';
+  };
+  
   const [formValues, setFormValues] = useState({
-    yaml_file: '/app/sessions/default/workload.yaml',
+    yaml_file: getDefaultYamlPath(),
     host: 'localhost',
     datacenter: 'datacenter1',
-    keyspace: 'baselines',
-    additional_params: 'cycles=5000000 threads=8'
+    keyspace: 'baselines'
   });
   
   // When component mounts, check if there's YAML content in the context
@@ -64,24 +73,14 @@ const LoaderView = ({ onNext }) => {
     if (generatedYaml && generatedYaml.content) {
       setYamlContent(generatedYaml.content);
       
-      // If we have a server path from the context, use it directly
-      if (generatedYaml.serverPath) {
+      // Update the YAML file path with the full path
+      if (generatedYaml.sessionId && generatedYaml.filename) {
+        const fullPath = `/Users/glenio.borges/workspace/bench-flow/backend/sessions/${generatedYaml.sessionId}/${generatedYaml.filename}`;
         setFormValues(prev => ({
           ...prev,
-          yaml_file: generatedYaml.serverPath
+          yaml_file: fullPath
         }));
-        
-        console.log('Using YAML content from context with server path:', generatedYaml.serverPath);
-      } else if (generatedYaml.sessionId && generatedYaml.filename) {
-        // Construct a server path based on session ID and filename
-        const serverPath = `/app/sessions/${generatedYaml.sessionId}/${generatedYaml.filename}`;
-        
-        setFormValues(prev => ({
-          ...prev,
-          yaml_file: serverPath
-        }));
-        
-        console.log('Using YAML content from context with constructed path:', serverPath);
+        console.log('Using full path for YAML file:', fullPath);
       }
     }
   }, [generatedYaml]);
@@ -101,11 +100,10 @@ const LoaderView = ({ onNext }) => {
     reader.readAsText(file);
     
     // Create a unique session ID for this file
-    // In a real implementation, this would come from a server upload
     const mockSessionId = `upload_${Date.now()}`;
     
     // Update form values with a server-side path
-    const serverPath = `/app/sessions/${mockSessionId}/${file.name}`;
+    const serverPath = `/Users/glenio.borges/workspace/bench-flow/backend/sessions/${mockSessionId}/${file.name}`;
       
     setFormValues(prev => ({
       ...prev,
@@ -130,7 +128,7 @@ const LoaderView = ({ onNext }) => {
     setYamlContent(event.target.value);
   };
   
-  // Form fields for NB5 command generator
+  // Form fields for NB5 command generator - REMOVED additional_params field
   const commandFields = [
     {
       name: 'yaml_file',
@@ -144,7 +142,7 @@ const LoaderView = ({ onNext }) => {
         }
         return true;
       },
-      helperText: 'Full path to the YAML file on the server (e.g., /app/sessions/{session_id}/file.yaml)'
+      helperText: 'Full path to the YAML file on the server'
     },
     {
       name: 'host',
@@ -163,14 +161,6 @@ const LoaderView = ({ onNext }) => {
       label: 'Keyspace',
       type: 'text',
       required: true
-    },
-    {
-      name: 'additional_params',
-      label: 'Additional Parameters',
-      type: 'text',
-      multiline: true,
-      rows: 2,
-      placeholder: 'cycles=1000000 threads=8'
     }
   ];
   
@@ -179,7 +169,13 @@ const LoaderView = ({ onNext }) => {
     setIsGeneratingCommand(true);
     
     try {
-      const result = await generateCommand(values);
+      // Add fixed additional parameters
+      const commandValues = {
+        ...values,
+        additional_params: 'cycles=5000000 threads=8'
+      };
+      
+      const result = await generateCommand(commandValues);
       setCurrentCommand(result.command);
       setFormValues(values);
       
@@ -202,60 +198,7 @@ const LoaderView = ({ onNext }) => {
     }
   };
   
-  // Handle command execution
-  const handleExecuteCommand = async (command, values) => {
-    try {
-      // Show a loading indicator or message
-      addNotification({
-        type: 'info',
-        title: 'Starting Execution',
-        message: 'Preparing to execute the NoSQLBench workload...',
-        duration: 3000
-      });
-      
-      console.log('Executing with YAML content:', yamlContent ? `${yamlContent.substring(0, 100)}...` : 'No YAML content');
-      
-      // Create a temporary object with the YAML content and other parameters
-      const execParams = {
-        yaml_content: yamlContent,
-        host: values.host,
-        datacenter: values.datacenter,
-        keyspace: values.keyspace,
-        additional_params: values.additional_params,
-        timeout: 600 // 10 minutes timeout
-      };
-      
-      // Execute the command
-      const execution = await executeNB5(execParams);
-      console.log('Execution started:', execution);
-      
-      // Update workflow step
-      updateWorkflow({
-        steps: [{
-          name: 'Execute NB5 Command',
-          status: 'in-progress',
-          timestamp: new Date(),
-          details: `Started execution with ID: ${execution.id}`
-        }]
-      });
-      
-      return execution;
-    } catch (error) {
-      console.error('Error executing command:', error);
-      
-      // Add a more visible notification
-      addNotification({
-        type: 'error',
-        title: 'Execution Failed',
-        message: `Error: ${error.message || 'Unknown error occurred'}`,
-        duration: 5000
-      });
-      
-      throw error;
-    }
-  };
-  
-  // Handle script download
+  // Handle script download - with fixed additional parameters
   const handleDownloadScript = async (values) => {
     try {
       await downloadScript({
@@ -263,7 +206,7 @@ const LoaderView = ({ onNext }) => {
         host: values.host,
         datacenter: values.datacenter,
         keyspace: values.keyspace,
-        additional_params: values.additional_params
+        additional_params: 'cycles=5000000 threads=8' // Fixed parameters
       });
       
       // Update workflow step
@@ -305,11 +248,6 @@ const LoaderView = ({ onNext }) => {
       onNext();
     }
   };
-  
-  // Check if there's a valid execution that has completed
-  const hasCompletedExecution = 
-    activeExecution && 
-    activeExecution.status === 'completed';
   
   // Get stdout and stderr from the active execution
   const { stdout, stderr } = getExecutionOutput();
@@ -406,6 +344,10 @@ const LoaderView = ({ onNext }) => {
                       sx={{ mb: 2 }}
                     >
                       Using YAML file from previous step: {generatedYaml.filename || 'workload.yaml'}
+                      <br />
+                      <Typography variant="caption">
+                        Full path: {formValues.yaml_file}
+                      </Typography>
                     </Alert>
                   ) : (
                     <Alert 
@@ -471,7 +413,7 @@ const LoaderView = ({ onNext }) => {
           </Card>
         </Grid>
         
-        {/* Command Generator */}
+        {/* Command Generator - WITH EXECUTE BUTTON REMOVED */}
         {yamlContent && (
           <Grid item xs={12}>
             <CommandGenerator
@@ -479,14 +421,13 @@ const LoaderView = ({ onNext }) => {
               fields={commandFields}
               initialValues={formValues}
               onGenerate={handleGenerateCommand}
-              onExecute={handleExecuteCommand}
               onDownload={handleDownloadScript}
               isGenerating={isGeneratingCommand}
-              isExecuting={activeExecution?.is_running}
+              isExecuting={false}
               currentCommand={currentCommand}
               generateLabel="Generate NB5 Command"
-              executeLabel="Execute Workload"
               downloadLabel="Download as Script"
+              showExecuteButton={false} // This is the key change - hide the execute button
             />
           </Grid>
         )}
@@ -512,7 +453,6 @@ const LoaderView = ({ onNext }) => {
               color="primary"
               onClick={handleNext}
               endIcon={<NavigateNextIcon />}
-              disabled={!hasCompletedExecution}
             >
               Next: DSBulk Unload
             </Button>

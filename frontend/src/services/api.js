@@ -23,12 +23,31 @@ async function fetchWithErrorHandling(url, options = {}) {
       
       try {
         const errorData = await response.json();
-        errorMessage = errorData.detail || `Server error: ${response.status}`;
-        errorDetails = errorData;
         console.error('Error response data:', errorData);
+        
+        // Handle FastAPI error format which often has a 'detail' field
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.join('; ');
+          } else if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else {
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        } else {
+          errorMessage = `Server error: ${response.status}`;
+        }
+        
+        errorDetails = errorData;
       } catch (e) {
-        errorMessage = `Server error: ${response.status}`;
-        console.error('Could not parse error response as JSON');
+        console.error('Could not parse error response as JSON, trying text');
+        try {
+          const textError = await response.text();
+          errorMessage = `Server error (${response.status}): ${textError}`;
+          console.error('Error text response:', textError);
+        } catch (textError) {
+          errorMessage = `Server error: ${response.status}`;
+        }
       }
       
       const error = new Error(errorMessage);
@@ -51,7 +70,8 @@ async function fetchWithErrorHandling(url, options = {}) {
     } catch (e) {
       console.error('Error parsing JSON response:', e);
       console.log('Raw response text:', text);
-      throw new Error('Invalid JSON response from server');
+      // For raw text responses, just return the text
+      return { text: text };
     }
   } catch (error) {
     console.error('API call failed:', error);
@@ -62,7 +82,6 @@ async function fetchWithErrorHandling(url, options = {}) {
 /**
  * Create FormData from an object
  */
-// Enhanced createFormData function to better handle YAML content
 function createFormData(data) {
   const formData = new FormData();
   
@@ -201,16 +220,42 @@ export const nb5Api = {
     });
   },
   
-  // Execute NB5 command
+  // Execute NB5 command - UPDATED to handle file path properly
   executeNb5: async (params) => {
-    const formData = createFormData(params);
+    // Log that we're executing with file path if available
+    if (params.yaml_file) {
+      console.log('Executing NB5 with file path:', params.yaml_file);
+    }
+    
+    // If both yaml_file and yaml_content are provided, prefer yaml_file
+    if (params.yaml_file && params.yaml_content) {
+      console.log('Both yaml_file and yaml_content provided - using yaml_file');
+      const paramsWithoutContent = { ...params };
+      delete paramsWithoutContent.yaml_content;
+      
+      try {
+        return await fetchWithErrorHandling(`${API_BASE_URL}/nb5/execute`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(paramsWithoutContent)
+        });
+      } catch (error) {
+        console.error('Error executing with yaml_file:', error);
+        throw error;
+      }
+    }
+    
+    // Otherwise, proceed with normal form data method
+    const apiFormData = createFormData(params);
     
     // Log the keys being sent (but not the actual content for security)
     console.log('Sending form data keys:', Object.keys(params));
     
     return fetchWithErrorHandling(`${API_BASE_URL}/nb5/execute`, {
       method: 'POST',
-      body: formData
+      body: apiFormData
     });
   },
   

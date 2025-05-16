@@ -1,3 +1,4 @@
+// Modified NB5Context.jsx with improved error handling and request formatting
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { nb5Api } from '../services/api';
 import { useAppContext } from './AppContext';
@@ -37,15 +38,6 @@ export const NB5Provider = ({ children }) => {
           message: `NB5 JAR found at ${result.path}`,
         });
       } else {
-        addNotification({
-          type: 'warning',
-          title: 'NB5 Not Found',
-          message: `NB5 JAR not found at ${result.path}`,
-          persistent: true,
-        });
-      }
-
-      if (!result.valid) {
         addNotification({
           type: 'warning',
           title: 'NB5 Not Found',
@@ -103,43 +95,90 @@ export const NB5Provider = ({ children }) => {
       
       // Ensure yaml_content is properly formatted
       if (params.yaml_content) {
-        // Remove any problematic characters or ensure proper encoding
-        params.yaml_content = params.yaml_content.trim();
+        // Make sure it's a string and trim it
+        params.yaml_content = String(params.yaml_content).trim();
+        
+        // Check if it's actually YAML content
+        if (!params.yaml_content.includes(':')) {
+          console.warn('Warning: yaml_content may not be valid YAML');
+        }
+        
+        // Log the size of yaml_content
+        console.log(`YAML content size: ${params.yaml_content.length} bytes`);
+        
+        // If it's too large, we should warn about it
+        if (params.yaml_content.length > 500000) {
+          console.warn('Warning: yaml_content is very large, consider using a file instead');
+        }
+      } else {
+        console.warn('Warning: No yaml_content provided');
+        // Add a fallback YAML content
+        params.yaml_content = `# Default fallback YAML\nscenarios:\n  default:\n    schema: run driver=cql tags=block:schema threads===UNDEF cycles==UNDEF\n    main: run driver=cql tags=block:main threads=8 cycles=5000000\n`;
       }
       
-      const result = await nb5Api.executeNb5(params);
-      console.log('Execution result from backend:', result);
-      
-      if (!result || !result.execution_id) {
-        throw new Error('No execution ID returned from the server');
-      }
-      
-      // Create a new execution record with initial stdout/stderr arrays
-      const execution = {
-        id: result.execution_id,
-        command: result.command || '',
-        status: 'running',
-        timestamp: new Date(),
-        stdout: [],
-        stderr: [],
-        is_running: true
+      // For testing - if you want to use a fixed YAML file path instead of content
+      // Uncomment this to bypass the yaml_content and use a file path instead
+      /*
+      const fixedParams = {
+        ...params,
+        yaml_file: '/Users/glenio.borges/workspace/bench-flow/backend/sessions/710cf41d-e0ba-4004-a0a5-c7dbee641c47/output.yaml',
+        yaml_content: undefined  // Remove yaml_content to force using the file
       };
+      */
       
-      // Update executions list
-      setExecutions(prev => [execution, ...prev]);
-      setActiveExecution(execution);
-      
-      // Start polling for status updates
-      startStatusPolling(result.execution_id);
-      
-      addNotification({
-        type: 'success',
-        title: 'Execution Started',
-        message: `NB5 execution started with ID: ${result.execution_id}`,
-        duration: 3000
-      });
-      
-      return execution;
+      try {
+        // Execute with the modified params
+        const result = await nb5Api.executeNb5(params);
+        console.log('Execution result from backend:', result);
+        
+        if (!result || !result.execution_id) {
+          throw new Error('No execution ID returned from the server');
+        }
+        
+        // Create a new execution record with initial stdout/stderr arrays
+        const execution = {
+          id: result.execution_id,
+          command: result.command || '',
+          status: 'running',
+          timestamp: new Date(),
+          stdout: [],
+          stderr: [],
+          is_running: true
+        };
+        
+        // Update executions list
+        setExecutions(prev => [execution, ...prev]);
+        setActiveExecution(execution);
+        
+        // Start polling for status updates
+        startStatusPolling(result.execution_id);
+        
+        addNotification({
+          type: 'success',
+          title: 'Execution Started',
+          message: `NB5 execution started with ID: ${result.execution_id}`,
+          duration: 3000
+        });
+        
+        return execution;
+      } catch (apiError) {
+        console.error('API Error Details:', apiError);
+        
+        // Check if there's a specific error message from the server
+        let errorMessage = 'Unknown error occurred';
+        if (apiError.message) {
+          errorMessage = apiError.message;
+        } else if (apiError.details && apiError.details.detail) {
+          // Handle FastAPI error format
+          if (Array.isArray(apiError.details.detail)) {
+            errorMessage = apiError.details.detail.join('; ');
+          } else {
+            errorMessage = apiError.details.detail;
+          }
+        }
+        
+        throw new Error(`NB5 execution failed: ${errorMessage}`);
+      }
     } catch (error) {
       console.error('NB5 Execution error:', error);
       setError(error);
