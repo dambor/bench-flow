@@ -1,3 +1,4 @@
+// Modified UnloadView.jsx that parses the original CQL schema
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -30,14 +31,17 @@ import StorageIcon from '@mui/icons-material/Storage';
 
 import CommandGenerator from '../components/common/CommandGenerator';
 import ConsoleViewer from '../components/common/ConsoleViewer';
+import FileUpload from '../components/common/FileUpload';
 import { useSchemaContext } from '../context/SchemaContext';
 import { useDSBulkContext } from '../context/DSBulkContext';
 import { useAppContext } from '../context/AppContext';
+import { schemaApi } from '../services/api';
 
 const UnloadView = ({ onNext }) => {
   const { 
     schemaData,
-    generatedYamlFiles
+    parseSchema,
+    isParsingSchema
   } = useSchemaContext();
   
   const {
@@ -50,15 +54,22 @@ const UnloadView = ({ onNext }) => {
     downloadScript
   } = useDSBulkContext();
   
-  const { updateWorkflow } = useAppContext();
+  const { updateWorkflow, addNotification } = useAppContext();
   
+  // State for schema file upload
+  const [schemaFile, setSchemaFile] = useState(null);
+  const [isParsingCQL, setIsParsingCQL] = useState(false);
+  
+  // State for table data
   const [tableOptions, setTableOptions] = useState([]);
   const [selectedTable, setSelectedTable] = useState('');
   const [primaryKeyOptions, setPrimaryKeyOptions] = useState([]);
+  
+  // State for command generator
   const [isGeneratingCommand, setIsGeneratingCommand] = useState(false);
   const [currentCommand, setCurrentCommand] = useState('');
   const [formValues, setFormValues] = useState({
-    keyspace: '',
+    keyspace: 'centralpayment',
     table: '',
     operation: 'unload',
     primary_key: '',
@@ -66,43 +77,60 @@ const UnloadView = ({ onNext }) => {
     limit: 1000000
   });
   
-  // Populate table options when schema data is available
+  // Check for schema data when component mounts
   useEffect(() => {
     if (schemaData && schemaData.tables) {
-      const tables = Object.entries(schemaData.tables).map(([fullName, tableInfo]) => ({
-        value: fullName,
-        label: tableInfo.name || fullName.split('.').pop(),
-        keyspace: tableInfo.keyspace || fullName.split('.')[0]
-      }));
-      
-      setTableOptions(tables);
-      
-      // If we have tables, select the first one
-      if (tables.length > 0) {
-        setSelectedTable(tables[0].value);
-        
-        // Set keyspace and table in form values
-        setFormValues(prev => ({
-          ...prev,
-          keyspace: tables[0].keyspace,
-          table: tables[0].label
-        }));
-        
-        // Set primary key options for the selected table
-        updatePrimaryKeyOptions(tables[0].value);
-      }
+      populateTableOptions(schemaData);
     }
   }, [schemaData]);
   
-  // Update primary key options when selected table changes
-  const updatePrimaryKeyOptions = (tableFullName) => {
-    if (!schemaData || !schemaData.tables || !tableFullName) return;
+  // Populate table options from schema data
+  const populateTableOptions = (schema) => {
+    if (!schema || !schema.tables) return;
     
-    const tableInfo = schemaData.tables[tableFullName];
+    const tables = Object.entries(schema.tables).map(([fullName, tableInfo]) => ({
+      value: fullName,
+      label: tableInfo.name || fullName.split('.').pop(),
+      keyspace: tableInfo.keyspace || fullName.split('.')[0]
+    }));
+    
+    console.log("Schema tables loaded:", tables);
+    setTableOptions(tables);
+    
+    // If we have tables, select the first one
+    if (tables.length > 0) {
+      setSelectedTable(tables[0].value);
+      
+      // Set keyspace and table in form values
+      setFormValues(prev => ({
+        ...prev,
+        keyspace: tables[0].keyspace || 'centralpayment',
+        table: tables[0].label
+      }));
+      
+      // Set primary key options for the selected table
+      updatePrimaryKeyOptions(tables[0].value, schema);
+    }
+  };
+  
+  // Update primary key options when selected table changes
+  const updatePrimaryKeyOptions = (tableFullName, schema = schemaData) => {
+    if (!schema || !schema.tables || !tableFullName) return;
+    
+    const tableInfo = schema.tables[tableFullName];
     if (!tableInfo || !tableInfo.primary_key) return;
     
-    // Extract primary key columns
-    const pkColumns = tableInfo.primary_key.flat(); // Flatten nested arrays
+    // Extract primary key columns - flatten nested arrays
+    const pkColumns = [];
+    tableInfo.primary_key.forEach(part => {
+      if (Array.isArray(part)) {
+        pkColumns.push(...part);
+      } else {
+        pkColumns.push(part);
+      }
+    });
+    
+    console.log("Primary key columns for", tableFullName, ":", pkColumns);
     
     setPrimaryKeyOptions(pkColumns.map(col => ({
       value: col,
@@ -115,6 +143,38 @@ const UnloadView = ({ onNext }) => {
         ...prev,
         primary_key: pkColumns[0]
       }));
+    }
+  };
+  
+  // Handle schema file upload and parsing
+  const handleSchemaFileSelected = async (files) => {
+    if (!files || files.length === 0) return;
+    
+    const file = files[0];
+    setSchemaFile(file);
+    
+    // Parse the schema file
+    setIsParsingCQL(true);
+    try {
+      const parsedSchema = await parseSchema(file);
+      
+      // Update the UI with the parsed schema
+      populateTableOptions(parsedSchema);
+      
+      addNotification({
+        type: 'success',
+        title: 'Schema Parsed',
+        message: `Successfully parsed schema with ${Object.keys(parsedSchema.tables || {}).length} tables`
+      });
+    } catch (error) {
+      console.error("Error parsing schema file:", error);
+      addNotification({
+        type: 'error',
+        title: 'Parsing Error',
+        message: 'Could not parse the schema file'
+      });
+    } finally {
+      setIsParsingCQL(false);
     }
   };
   
@@ -131,7 +191,7 @@ const UnloadView = ({ onNext }) => {
     // Update form values
     setFormValues(prev => ({
       ...prev,
-      keyspace: tableInfo.keyspace,
+      keyspace: tableInfo.keyspace || 'centralpayment',
       table: tableInfo.name
     }));
     
@@ -344,6 +404,102 @@ const UnloadView = ({ onNext }) => {
                 <Alert severity="warning">
                   DSBulk was not found at the expected location. Please make sure DSBulk is installed.
                 </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Schema Upload Card */}
+        <Grid item xs={12}>
+          <Card variant="outlined">
+            <CardHeader 
+              title="CQL Schema" 
+              titleTypographyProps={{ variant: 'h6' }}
+              avatar={<StorageIcon color="primary" />}
+            />
+            <Divider />
+            <CardContent>
+              {!schemaData || Object.keys(schemaData.tables || {}).length === 0 ? (
+                <>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Please upload your CQL schema file to load tables and primary keys
+                  </Alert>
+                  
+                  <FileUpload 
+                    accept=".cql,.txt"
+                    multiple={false}
+                    maxSize={5 * 1024 * 1024} // 5MB
+                    onFilesSelected={handleSchemaFileSelected}
+                    isLoading={isParsingCQL || isParsingSchema}
+                    helperText="Upload your CQL schema file containing table definitions"
+                    buttonText="Select Schema File"
+                  />
+                </>
+              ) : (
+                <>
+                  <Alert 
+                    severity="success" 
+                    icon={<DoneIcon fontSize="inherit" />}
+                  >
+                    Schema loaded: {schemaFile?.name || "Schema data loaded"}
+                    <br/>
+                    Found {Object.keys(schemaData.tables || {}).length} tables in the schema
+                  </Alert>
+                  
+                  <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel id="table-select-label">Select Table</InputLabel>
+                        <Select
+                          labelId="table-select-label"
+                          id="table-select"
+                          value={selectedTable}
+                          label="Select Table"
+                          onChange={handleTableChange}
+                        >
+                          {tableOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label} ({option.keyspace})
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        <FormHelperText>
+                          Select a table to export primary keys from
+                        </FormHelperText>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel id="primary-key-label">Primary Key Column</InputLabel>
+                        <Select
+                          labelId="primary-key-label"
+                          id="primary-key-select"
+                          value={formValues.primary_key}
+                          label="Primary Key Column"
+                          onChange={(e) => setFormValues(prev => ({ ...prev, primary_key: e.target.value }))}
+                          disabled={primaryKeyOptions.length === 0}
+                        >
+                          {primaryKeyOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        <FormHelperText>
+                          Select primary key column to extract
+                        </FormHelperText>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+                </>
+              )}
+              
+              {(isParsingCQL || isParsingSchema) && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                  <CircularProgress size={24} sx={{ mr: 2 }} />
+                  <Typography>Parsing schema file...</Typography>
+                </Box>
               )}
             </CardContent>
           </Card>
