@@ -18,7 +18,7 @@ logger = logging.getLogger("nb5_executor")
 class NB5Executor:
     def __init__(self, nb5_path: str = None):
         # Default to a common location if not specified
-        self.nb5_path = nb5_path or str(Path(os.path.dirname(os.path.abspath(__file__))) / "nb5.jar")
+        self.nb5_path = nb5_path or os.path.expanduser("~/workspace/nb5.jar")
         self.active_executions = {}
         self.execution_logs = {}
         

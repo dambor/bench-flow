@@ -16,7 +16,8 @@ export const YamlProvider = ({ children }) => {
     content: '',
     filename: '',
     sessionId: '',
-    downloadUrl: ''
+    downloadUrl: '',
+    serverPath: ''
   });
   
   // API client for CQLGen operations
@@ -73,12 +74,17 @@ export const YamlProvider = ({ children }) => {
             const yamlBlob = await downloadFile(result.session_id, filename);
             const yamlContent = await yamlBlob.text();
             
+            // Build the full server path (where the file would be stored on the server)
+            // This would be used by NB5 executor in a real deployment
+            const serverPath = `/app/sessions/${result.session_id}/${filename}`;
+            
             // Store the generated YAML data
             setGeneratedYaml({
               content: yamlContent,
               filename: filename,
               sessionId: result.session_id,
-              downloadUrl: result.download_url
+              downloadUrl: result.download_url,
+              serverPath: serverPath // Added server path
             });
           } catch (error) {
             console.error('Error reading YAML content:', error);
@@ -184,12 +190,17 @@ export const YamlProvider = ({ children }) => {
   };
   
   // Manual function to set YAML content
-  const setYamlContent = (content, filename = 'workload.yaml') => {
+  const setYamlContent = (content, filename = 'workload.yaml', sessionId = null) => {
+    const serverPath = sessionId 
+      ? `/app/sessions/${sessionId}/${filename}` 
+      : null;
+      
     setGeneratedYaml({
       content,
       filename,
-      sessionId: '',
-      downloadUrl: ''
+      sessionId: sessionId || '',
+      downloadUrl: sessionId ? `/api/cqlgen/download/${sessionId}/${filename}` : '',
+      serverPath: serverPath || ''
     });
   };
   
@@ -227,7 +238,8 @@ export const YamlProvider = ({ children }) => {
       content: '',
       filename: '',
       sessionId: '',
-      downloadUrl: ''
+      downloadUrl: '',
+      serverPath: ''
     });
   };
   

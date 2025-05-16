@@ -14,7 +14,7 @@ logger = logging.getLogger("dsbulk_manager")
 class DSBulkManager:
     def __init__(self, dsbulk_path: str = None):
         # Use the provided path or default to a common location
-        self.dsbulk_path = dsbulk_path or str(Path(os.path.dirname(os.path.abspath(__file__))) / f"dsbulk-1.11.0.jar")
+        self.dsbulk_path = dsbulk_path or os.path.expanduser("~/workspace/dsbulk-1.11.0.jar")
         
     def validate_dsbulk_path(self) -> bool:
         """

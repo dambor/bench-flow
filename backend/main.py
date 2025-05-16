@@ -171,19 +171,15 @@ async def startup_event():
     """
     logger.info("Initializing NoSQLBench Flow application...")
     
-    # Ensure NB5 jar is available in the backend directory
+    # Ensure NB5 jar is available
     logger.info("Checking for nb5.jar...")
-    nb5_path = BASE_DIR / "nb5.jar"
-    if not nb5_path.exists():
-        logger.info(f"nb5.jar not found at {nb5_path}, downloading...")
-        # Download code from earlier
+    nb5_path = nb5_path = BASE_DIR / "nb5.jar"
+    logger.info(f"NB5 jar path: {nb5_path}")
     
-    # Ensure DSBulk jar is available in the backend directory 
+    # Ensure DSBulk jar is available
     logger.info("Checking for dsbulk.jar...")
-    dsbulk_path = BASE_DIR / f"dsbulk-{DSBULK_VERSION}.jar"
-    if not dsbulk_path.exists():
-        logger.info(f"DSBulk not found at {dsbulk_path}, downloading...")
-        # Download code from earlier
+    dsbulk_path = ensure_dsbulk()
+    logger.info(f"DSBulk jar path: {dsbulk_path}")
     
     # Update the paths in the executors
     nb5_executor.nb5_path = str(nb5_path)
@@ -516,17 +512,10 @@ async def generate_read_yaml_json(
 @app.get("/api/dsbulk/validate")
 async def validate_dsbulk():
     """Validate that the DSBulk JAR exists"""
-    # Update to make sure it checks the backend directory
-    dsbulk_path = BASE_DIR / f"dsbulk-{DSBULK_VERSION}.jar"
-    is_valid = os.path.exists(dsbulk_path)
-    
-    # Update the manager's path
-    if is_valid:
-        dsbulk_manager.dsbulk_path = str(dsbulk_path)
-    
+    is_valid = dsbulk_manager.validate_dsbulk_path()
     return {
         "valid": is_valid,
-        "path": str(dsbulk_path)
+        "path": dsbulk_manager.dsbulk_path
     }
 
 @app.post("/api/dsbulk/generate-commands")
@@ -670,17 +659,10 @@ async def download_dsbulk_script(
 @app.get("/api/nb5/validate")
 async def validate_nb5():
     """Validate that the NB5 JAR exists"""
-    # Update to make sure it checks the backend directory
-    nb5_path = BASE_DIR / "nb5.jar"
-    is_valid = os.path.exists(nb5_path)
-    
-    # Update the executor's path
-    if is_valid:
-        nb5_executor.nb5_path = str(nb5_path)
-    
+    is_valid = nb5_executor.validate_nb5_path()
     return {
         "valid": is_valid,
-        "path": str(nb5_path)
+        "path": nb5_executor.nb5_path
     }
 
 @app.post("/api/nb5/generate-command")
@@ -983,4 +965,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)                            
+    uvicorn.run(app, host="0.0.0.0", port=8001)
