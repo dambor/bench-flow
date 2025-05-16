@@ -10,38 +10,26 @@ import {
   Alert,
   Grid,
   Divider,
-  Tab,
-  Tabs,
-  MenuItem,
-  ListItemText,
-  ListItemIcon,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
+  TextField,
   Paper
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
-import StorageIcon from '@mui/icons-material/Storage';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import DoneIcon from '@mui/icons-material/Done';
-import ErrorIcon from '@mui/icons-material/Error';
 import DescriptionIcon from '@mui/icons-material/Description';
+import DoneIcon from '@mui/icons-material/Done';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import CommandGenerator from '../components/common/CommandGenerator';
 import ConsoleViewer from '../components/common/ConsoleViewer';
-import { useSchemaContext } from '../context/SchemaContext';
+import FileUpload from '../components/common/FileUpload';
 import { useNB5Context } from '../context/NB5Context';
 import { useAppContext } from '../context/AppContext';
+import { useYamlContext } from '../context/YamlContext';
 
 const LoaderView = ({ onNext }) => {
-  const { 
-    generatedYamlFiles 
-  } = useSchemaContext();
-  
   const {
     isValidated,
     nb5Path,
@@ -52,86 +40,94 @@ const LoaderView = ({ onNext }) => {
     downloadScript
   } = useNB5Context();
   
+  const { generatedYaml, downloadYaml } = useYamlContext();
   const { updateWorkflow, addNotification } = useAppContext();
   
-  const [selectedYamlFile, setSelectedYamlFile] = useState('');
-  const [selectedYamlContent, setSelectedYamlContent] = useState('');
+  // State for managing YAML files
+  const [yamlFile, setYamlFile] = useState(null);
+  const [yamlContent, setYamlContent] = useState('');
+  const [isUploadMode, setIsUploadMode] = useState(false); // Set to false to prioritize using the shared YAML
+  
+  // State for command generation and execution
   const [isGeneratingCommand, setIsGeneratingCommand] = useState(false);
   const [currentCommand, setCurrentCommand] = useState('');
-  const [yamlFilePath, setYamlFilePath] = useState('');
   const [formValues, setFormValues] = useState({
-    yaml_file: '/path/to/yaml_file.yaml',
+    yaml_file: '/app/sessions/default/workload.yaml',
     host: 'localhost',
     datacenter: 'datacenter1',
     keyspace: 'baselines',
     additional_params: 'cycles=5000000 threads=8'
   });
   
-  // Initialize selected YAML file when component mounts or files change
+  // When component mounts, check if there's YAML content in the context
   useEffect(() => {
-    if (generatedYamlFiles && generatedYamlFiles.length > 0) {
-      const firstFile = generatedYamlFiles[0];
-      setSelectedYamlFile(firstFile.filename);
-      setSelectedYamlContent(firstFile.content);
+    if (generatedYaml && generatedYaml.content) {
+      setYamlContent(generatedYaml.content);
       
-      // Set the file path based on frontend-generated path (example)
-      // In a real application, you would save the file on the server and use the actual path
-      const filePath = `/tmp/${firstFile.filename}`;
-      setYamlFilePath(filePath);
-      
-      // Update form values with the file path
-      setFormValues(prev => ({
-        ...prev,
-        yaml_file: filePath
-      }));
+      // If we have a server path from the context, use it directly
+      if (generatedYaml.serverPath) {
+        setFormValues(prev => ({
+          ...prev,
+          yaml_file: generatedYaml.serverPath
+        }));
+        
+        console.log('Using YAML content from context with server path:', generatedYaml.serverPath);
+      } else if (generatedYaml.sessionId && generatedYaml.filename) {
+        // Construct a server path based on session ID and filename
+        const serverPath = `/app/sessions/${generatedYaml.sessionId}/${generatedYaml.filename}`;
+        
+        setFormValues(prev => ({
+          ...prev,
+          yaml_file: serverPath
+        }));
+        
+        console.log('Using YAML content from context with constructed path:', serverPath);
+      }
     }
-  }, [generatedYamlFiles]);
+  }, [generatedYaml]);
   
-  // Handle YAML file selection change
-  const handleYamlFileChange = (event) => {
-    const filename = event.target.value;
-    setSelectedYamlFile(filename);
+  // Handle file upload
+  const handleYamlFileSelected = (files) => {
+    if (!files || files.length === 0) return;
     
-    // Find the corresponding content
-    const file = generatedYamlFiles.find(f => f.filename === filename);
-    if (file) {
-      setSelectedYamlContent(file.content);
+    const file = files[0];
+    setYamlFile(file);
+    
+    // Read file content
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setYamlContent(e.target.result);
+    };
+    reader.readAsText(file);
+    
+    // Create a unique session ID for this file
+    // In a real implementation, this would come from a server upload
+    const mockSessionId = `upload_${Date.now()}`;
+    
+    // Update form values with a server-side path
+    const serverPath = `/app/sessions/${mockSessionId}/${file.name}`;
       
-      // Update the file path
-      const filePath = `/tmp/${filename}`;
-      setYamlFilePath(filePath);
-      
-      // Update form values with the file path
-      setFormValues(prev => ({
-        ...prev,
-        yaml_file: filePath
-      }));
-    }
+    setFormValues(prev => ({
+      ...prev,
+      yaml_file: serverPath
+    }));
+    
+    console.log('YAML file selected:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      path: serverPath
+    });
   };
   
-  // Handle download of the selected YAML file
-  const handleDownloadYaml = () => {
-    if (!selectedYamlFile || !selectedYamlContent) return;
-    
-    const blob = new Blob([selectedYamlContent], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = selectedYamlFile;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
-    
-    // Update workflow step
-    updateWorkflow({
-      steps: [{
-        name: 'Download YAML',
-        status: 'completed',
-        timestamp: new Date(),
-        details: `Downloaded ${selectedYamlFile}`
-      }]
-    });
+  // Toggle between upload mode and direct input mode
+  const handleToggleMode = () => {
+    setIsUploadMode(!isUploadMode);
+  };
+  
+  // Handle direct YAML input changes
+  const handleYamlInputChange = (event) => {
+    setYamlContent(event.target.value);
   };
   
   // Form fields for NB5 command generator
@@ -147,7 +143,8 @@ const LoaderView = ({ onNext }) => {
           return 'File must have .yaml or .yml extension';
         }
         return true;
-      }
+      },
+      helperText: 'Full path to the YAML file on the server (e.g., /app/sessions/{session_id}/file.yaml)'
     },
     {
       name: 'host',
@@ -216,11 +213,11 @@ const LoaderView = ({ onNext }) => {
         duration: 3000
       });
       
-      console.log('Executing with YAML content:', selectedYamlContent ? `${selectedYamlContent.substring(0, 100)}...` : 'No YAML content');
+      console.log('Executing with YAML content:', yamlContent ? `${yamlContent.substring(0, 100)}...` : 'No YAML content');
       
       // Create a temporary object with the YAML content and other parameters
       const execParams = {
-        yaml_content: selectedYamlContent,
+        yaml_content: yamlContent,
         host: values.host,
         datacenter: values.datacenter,
         keyspace: values.keyspace,
@@ -317,6 +314,36 @@ const LoaderView = ({ onNext }) => {
   // Get stdout and stderr from the active execution
   const { stdout, stderr } = getExecutionOutput();
   
+  // Download the current YAML content as a file
+  const handleSaveYamlToFile = () => {
+    if (!yamlContent) {
+      addNotification({
+        type: 'warning',
+        title: 'No Content',
+        message: 'There is no YAML content to download'
+      });
+      return;
+    }
+    
+    const blob = new Blob([yamlContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const filename = yamlFile ? yamlFile.name : (generatedYaml.filename || 'workload.yaml');
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    
+    addNotification({
+      type: 'success',
+      title: 'File Downloaded',
+      message: `${filename} has been downloaded`
+    });
+  };
+  
   return (
     <Container maxWidth="xl">
       <Typography variant="h4" component="h1" gutterBottom>
@@ -327,97 +354,142 @@ const LoaderView = ({ onNext }) => {
       </Typography>
       
       <Grid container spacing={3} sx={{ mt: 1 }}>
-        {/* Select YAML file to execute */}
-        {generatedYamlFiles && generatedYamlFiles.length > 0 ? (
-          <Grid item xs={12}>
-            <Card variant="outlined">
-              <CardHeader 
-                title="Select Write YAML File" 
-                titleTypographyProps={{ variant: 'h6' }}
-                avatar={<StorageIcon color="primary" />}
-                action={
+        {/* YAML File Selection/Display */}
+        <Grid item xs={12}>
+          <Card variant="outlined">
+            <CardHeader 
+              title="YAML Workload File" 
+              titleTypographyProps={{ variant: 'h6' }}
+              avatar={<DescriptionIcon color="primary" />}
+              action={
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button
                     size="small"
                     variant="outlined"
-                    startIcon={<CloudDownloadIcon />}
-                    onClick={handleDownloadYaml}
-                    disabled={!selectedYamlFile}
+                    startIcon={isUploadMode ? <DescriptionIcon /> : <FileUploadIcon />}
+                    onClick={handleToggleMode}
                   >
-                    Download
+                    {isUploadMode ? 'Direct Input' : 'File Upload'}
                   </Button>
-                }
-              />
-              <Divider />
-              
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel id="yaml-file-select-label">Select YAML File</InputLabel>
-                      <Select
-                        labelId="yaml-file-select-label"
-                        id="yaml-file-select"
-                        value={selectedYamlFile}
-                        label="Select YAML File"
-                        onChange={handleYamlFileChange}
-                      >
-                        {generatedYamlFiles.map((file, index) => (
-                          <MenuItem key={index} value={file.filename}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <DescriptionIcon sx={{ mr: 1, fontSize: 20, color: 'primary.main' }} />
-                              {file.filename}
-                            </Box>
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Paper 
-                      variant="outlined" 
-                      sx={{ 
-                        p: 2, 
-                        bgcolor: 'grey.50', 
-                        maxHeight: '300px', 
-                        overflow: 'auto',
-                        fontFamily: 'monospace',
-                        fontSize: '0.85rem',
-                        whiteSpace: 'pre-wrap'
-                      }}
+                  {yamlContent && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<CloudDownloadIcon />}
+                      onClick={handleSaveYamlToFile}
                     >
-                      {selectedYamlContent}
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        ) : (
-          <Grid item xs={12}>
-            <Alert severity="warning">
-              No YAML files have been generated. Please go back to the previous step and generate YAML files.
-            </Alert>
-          </Grid>
-        )}
+                      Download
+                    </Button>
+                  )}
+                </Box>
+              }
+            />
+            <Divider />
+            
+            <CardContent>
+              {isUploadMode ? (
+                <FileUpload 
+                  accept=".yaml,.yml"
+                  multiple={false}
+                  maxSize={5 * 1024 * 1024} // 5MB
+                  onFilesSelected={handleYamlFileSelected}
+                  isLoading={false}
+                  helperText="Upload a NoSQLBench YAML workload file"
+                  buttonText="Select YAML File"
+                />
+              ) : (
+                <>
+                  {generatedYaml.content ? (
+                    <Alert 
+                      severity="success" 
+                      icon={<DoneIcon fontSize="inherit" />}
+                      sx={{ mb: 2 }}
+                    >
+                      Using YAML file from previous step: {generatedYaml.filename || 'workload.yaml'}
+                    </Alert>
+                  ) : (
+                    <Alert 
+                      severity="info"
+                      sx={{ mb: 2 }}
+                    >
+                      No YAML file from previous step. You can enter content directly or switch to file upload.
+                    </Alert>
+                  )}
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={12}
+                    label="YAML Content"
+                    value={yamlContent}
+                    onChange={handleYamlInputChange}
+                    placeholder="Paste your YAML content here..."
+                    InputProps={{
+                      style: { fontFamily: 'monospace', fontSize: '0.85rem' }
+                    }}
+                  />
+                </>
+              )}
+              
+              {yamlFile && isUploadMode && (
+                <Alert 
+                  severity="success" 
+                  icon={<DoneIcon fontSize="inherit" />}
+                  sx={{ mt: 2 }}
+                >
+                  YAML file loaded: {yamlFile.name}
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* NB5 Status */}
+        <Grid item xs={12}>
+          <Card variant="outlined">
+            <CardHeader 
+              title="NB5 Status" 
+              titleTypographyProps={{ variant: 'h6' }}
+              avatar={<SettingsIcon color="primary" />}
+            />
+            <Divider />
+            <CardContent>
+              {isValidating ? (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <CircularProgress size={24} sx={{ mr: 2 }} />
+                  <Typography>Checking NB5 installation...</Typography>
+                </Box>
+              ) : isValidated ? (
+                <Alert severity="success" icon={<DoneIcon />}>
+                  NB5 is installed and ready to use at: {nb5Path}
+                </Alert>
+              ) : (
+                <Alert severity="warning">
+                  NB5 was not found at the expected location. Please make sure NB5 is installed.
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
         
         {/* Command Generator */}
-        <Grid item xs={12}>
-          <CommandGenerator
-            title="NB5 Execution Configuration"
-            fields={commandFields}
-            initialValues={formValues}
-            onGenerate={handleGenerateCommand}
-            onExecute={handleExecuteCommand}
-            onDownload={handleDownloadScript}
-            isGenerating={isGeneratingCommand}
-            isExecuting={activeExecution?.is_running}
-            currentCommand={currentCommand}
-            generateLabel="Generate NB5 Command"
-            executeLabel="Execute Workload"
-            downloadLabel="Download as Script"
-          />
-        </Grid>
+        {yamlContent && (
+          <Grid item xs={12}>
+            <CommandGenerator
+              title="NB5 Execution Configuration"
+              fields={commandFields}
+              initialValues={formValues}
+              onGenerate={handleGenerateCommand}
+              onExecute={handleExecuteCommand}
+              onDownload={handleDownloadScript}
+              isGenerating={isGeneratingCommand}
+              isExecuting={activeExecution?.is_running}
+              currentCommand={currentCommand}
+              generateLabel="Generate NB5 Command"
+              executeLabel="Execute Workload"
+              downloadLabel="Download as Script"
+            />
+          </Grid>
+        )}
         
         {/* Execution Output */}
         {activeExecution && (

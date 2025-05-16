@@ -9,193 +9,135 @@ import {
   CardContent,
   Divider,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Checkbox,
-  FormControlLabel,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Chip,
-  Alert,
-  Paper,
   CircularProgress,
-  TextField
+  Alert,
+  Paper
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningIcon from '@mui/icons-material/Warning';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SchemaIcon from '@mui/icons-material/Schema';
-import StorageIcon from '@mui/icons-material/Storage';
-import TableViewIcon from '@mui/icons-material/TableView';
 import DescriptionIcon from '@mui/icons-material/Description';
+import SettingsIcon from '@mui/icons-material/Settings';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 
 import FileUpload from '../components/common/FileUpload';
-import { useSchemaContext } from '../context/SchemaContext';
 import { useAppContext } from '../context/AppContext';
+import { useYamlContext } from '../context/YamlContext';
 
 const WriteYamlView = ({ onNext }) => {
-  const { 
-    schemaData, 
-    isParsingSchema, 
-    selectedTables, 
-    generatedYamlFiles,
-    parseSchema, 
-    generateYaml, 
-    setSelectedTables 
-  } = useSchemaContext();
+  const { updateWorkflow, addNotification } = useAppContext();
+  const { cqlgenApi, generatedYaml, downloadYaml } = useYamlContext();
   
-  const { startWorkflow, updateWorkflow, addNotification } = useAppContext();
-  
-  const [isGeneratingYaml, setIsGeneratingYaml] = useState(false);
-  const [selectAllTables, setSelectAllTables] = useState(true);
-  const [selectedYamlFile, setSelectedYamlFile] = useState('');
-  const [selectedYamlContent, setSelectedYamlContent] = useState('');
-  
-  // When schema data changes, update selected tables state
-  useEffect(() => {
-    if (schemaData && schemaData.tables) {
-      const tableNames = Object.keys(schemaData.tables);
-      setSelectedTables(tableNames);
-      setSelectAllTables(true);
-    }
-  }, [schemaData]);
-  
-  // When generated YAML files change, update selected YAML file
-  useEffect(() => {
-    if (generatedYamlFiles && generatedYamlFiles.length > 0) {
-      setSelectedYamlFile(generatedYamlFiles[0].filename);
-      setSelectedYamlContent(generatedYamlFiles[0].content);
-    }
-  }, [generatedYamlFiles]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [schemaFile, setSchemaFile] = useState(null);
+  const [confFile, setConfFile] = useState(null);
+  const [generatedResult, setGeneratedResult] = useState(null);
   
   // Handle schema file selection
-  const handleSchemaFileSelected = async (files) => {
+  const handleSchemaFileSelected = (files) => {
     if (!files || files.length === 0) return;
+    setSchemaFile(files[0]);
     
-    try {
-      // Simply update the existing workflow with a new step
-      // Do NOT create a new workflow here - this is what's causing the duplication
-      updateWorkflow({
-        steps: [{
-          name: 'Upload Schema',
-          status: 'in-progress',
-          timestamp: new Date(),
-          details: `Parsing schema file: ${files[0].name}`
-        }]
-      });
-      
-      await parseSchema(files[0]);
-    } catch (error) {
-      console.error('Error parsing schema:', error);
-    }
+    // Log file information for debugging
+    console.log('Schema file selected:', {
+      name: files[0].name,
+      size: files[0].size,
+      type: files[0].type
+    });
   };
   
-  // Handle select all tables change
-  const handleSelectAllChange = (event) => {
-    const checked = event.target.checked;
-    setSelectAllTables(checked);
+  // Handle configuration file selection
+  const handleConfFileSelected = (files) => {
+    if (!files || files.length === 0) return;
+    setConfFile(files[0]);
     
-    if (checked && schemaData && schemaData.tables) {
-      setSelectedTables(Object.keys(schemaData.tables));
-    } else {
-      setSelectedTables([]);
-    }
+    // Log file information for debugging
+    console.log('Configuration file selected:', {
+      name: files[0].name,
+      size: files[0].size,
+      type: files[0].type
+    });
   };
   
-  // Handle individual table selection change
-  const handleTableSelectionChange = (tableName) => {
-    const isSelected = selectedTables.includes(tableName);
-    
-    if (isSelected) {
-      setSelectedTables(prev => prev.filter(t => t !== tableName));
-      if (selectAllTables) {
-        setSelectAllTables(false);
-      }
-    } else {
-      setSelectedTables(prev => [...prev, tableName]);
-      
-      // Check if all tables are now selected
-      if (schemaData && schemaData.tables && 
-          Object.keys(schemaData.tables).length === selectedTables.length + 1) {
-        setSelectAllTables(true);
-      }
-    }
-  };
-  
-  // Handle generate YAML button click
+  // Generate YAML using the cqlgen API
   const handleGenerateYaml = async () => {
-    if (!schemaData || selectedTables.length === 0) {
+    if (!schemaFile) {
       addNotification({
         type: 'error',
-        title: 'No tables selected',
-        message: 'Please select at least one table to generate YAML files'
+        title: 'Missing Schema File',
+        message: 'Please upload a CQL schema file'
       });
       return;
     }
     
-    setIsGeneratingYaml(true);
+    setIsProcessing(true);
     
     try {
       updateWorkflow({
         steps: [{
-          name: 'Selecting Tables',
-          status: 'completed',
+          name: 'Generate YAML',
+          status: 'in-progress',
           timestamp: new Date(),
-          details: `Selected ${selectedTables.length} tables for YAML generation`
+          details: `Generating YAML from ${schemaFile.name}`
         }]
       });
       
-      const files = await generateYaml(selectedTables);
+      // Try the alternative API if available
+      let result;
+      try {
+        console.log('Attempting to use processWithSchema API first...');
+        result = await cqlgenApi.processWithSchema(schemaFile, confFile);
+        console.log('processWithSchema API succeeded:', result);
+      } catch (firstError) {
+        console.error('Error with processWithSchema API:', firstError);
+        console.log('Falling back to generateYaml API...');
+        result = await cqlgenApi.generateYaml(schemaFile, confFile);
+        console.log('generateYaml API succeeded:', result);
+      }
       
-      /*if (files && files.length > 0) {
+      setGeneratedResult(result);
+      
+      // The generated YAML content is already stored in the YamlContext
+      // by the API methods in the context
+      
+      if (result.success) {
         addNotification({
           type: 'success',
           title: 'YAML Generated',
-          message: `Successfully generated ${files.length} YAML files`
+          message: 'Successfully generated YAML file'
         });
-      }*/
+        
+        // Update workflow step as completed
+        updateWorkflow({
+          steps: [{
+            name: 'Generate YAML',
+            status: 'completed',
+            timestamp: new Date(),
+            details: `Generated YAML from ${schemaFile.name}`
+          }]
+        });
+      }
     } catch (error) {
       console.error('Error generating YAML:', error);
+      addNotification({
+        type: 'error',
+        title: 'Generation Failed',
+        message: error.message || 'Failed to generate YAML'
+      });
+      
+      // Update workflow step as failed
+      updateWorkflow({
+        steps: [{
+          name: 'Generate YAML',
+          status: 'failed',
+          timestamp: new Date(),
+          error: error.message
+        }]
+      });
     } finally {
-      setIsGeneratingYaml(false);
+      setIsProcessing(false);
     }
-  };
-  
-  // Handle YAML file selection change
-  const handleYamlFileChange = (event) => {
-    const filename = event.target.value;
-    setSelectedYamlFile(filename);
-    
-    // Find the corresponding content
-    const file = generatedYamlFiles.find(f => f.filename === filename);
-    if (file) {
-      setSelectedYamlContent(file.content);
-    }
-  };
-  
-  // Handle download of the selected YAML file
-  const handleDownloadYaml = () => {
-    if (!selectedYamlFile || !selectedYamlContent) return;
-    
-    const blob = new Blob([selectedYamlContent], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = selectedYamlFile;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
-    /*
-    addNotification({
-      type: 'success',
-      title: 'File Downloaded',
-      message: `${selectedYamlFile} has been downloaded`,
-    });*/
   };
   
   // Handle next button click
@@ -216,15 +158,15 @@ const WriteYamlView = ({ onNext }) => {
         Generate Write YAML Files
       </Typography>
       <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-        Create NoSQLBench write workload YAML files from your Cassandra schema
+        Create NoSQLBench write workload YAML files from your Cassandra schema using CQLGen
       </Typography>
       
       <Grid container spacing={3} sx={{ mt: 1 }}>
-        {/* Step 1: Upload Schema */}
-        <Grid item xs={12} md={5}>
+        {/* Upload Schema File */}
+        <Grid item xs={12} md={6}>
           <Card variant="outlined" sx={{ height: '100%' }}>
             <CardHeader 
-              title="Step 1: Upload Schema" 
+              title="Upload Schema File" 
               titleTypographyProps={{ variant: 'h6' }}
               avatar={<SchemaIcon color="primary" />}
             />
@@ -235,141 +177,85 @@ const WriteYamlView = ({ onNext }) => {
                 multiple={false}
                 maxSize={5 * 1024 * 1024} // 5MB
                 onFilesSelected={handleSchemaFileSelected}
-                isLoading={isParsingSchema}
+                isLoading={isProcessing}
                 helperText="Drag and drop your CQL schema file here or click to browse"
                 buttonText="Select Schema File"
               />
               
-              {schemaData && (
+              {schemaFile && (
                 <Alert 
                   severity="success" 
                   icon={<CheckCircleIcon fontSize="inherit" />}
                   sx={{ mt: 2 }}
                 >
-                  Schema parsed successfully! Found {Object.keys(schemaData.tables || {}).length} tables
-                  and {Object.keys(schemaData.types || {}).length} user-defined types.
+                  Schema file selected: {schemaFile.name}
                 </Alert>
               )}
             </CardContent>
           </Card>
         </Grid>
         
-        {/* Step 2: Select Tables */}
-        <Grid item xs={12} md={7}>
+        {/* Upload Configuration File (Optional) */}
+        <Grid item xs={12} md={6}>
           <Card variant="outlined" sx={{ height: '100%' }}>
             <CardHeader 
-              title="Step 2: Select Tables" 
+              title="Upload Configuration File (Optional)" 
               titleTypographyProps={{ variant: 'h6' }}
-              avatar={<TableViewIcon color="primary" />}
-              action={
-                schemaData && (
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={selectAllTables}
-                        onChange={handleSelectAllChange}
-                        disabled={!schemaData || isGeneratingYaml}
-                      />
-                    }
-                    label="Select All"
-                  />
-                )
-              }
+              avatar={<SettingsIcon color="primary" />}
             />
             <Divider />
-            <CardContent sx={{ p: 0 }}>
-              {!schemaData ? (
-                <Box sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography color="text.secondary">
-                    Upload a schema file to view available tables
-                  </Typography>
-                </Box>
-              ) : (
-                <List dense sx={{ maxHeight: '300px', overflow: 'auto' }}>
-                  {Object.entries(schemaData.tables || {}).map(([fullTableName, tableInfo]) => {
-                    const isSelected = selectedTables.includes(fullTableName);
-                    const primaryKeyColumns = tableInfo.primary_key 
-                      ? tableInfo.primary_key.flat().join(', ') 
-                      : 'No primary key';
-                    
-                    return (
-                      <ListItem 
-                        key={fullTableName}
-                        dense
-                        button
-                        onClick={() => handleTableSelectionChange(fullTableName)}
-                        disabled={isGeneratingYaml}
-                        sx={{
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          bgcolor: isSelected ? 'rgba(63, 81, 181, 0.08)' : 'transparent',
-                        }}
-                      >
-                        <ListItemIcon>
-                          <Checkbox
-                            edge="start"
-                            checked={isSelected}
-                            tabIndex={-1}
-                            disableRipple
-                          />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={tableInfo.name || fullTableName.split('.').pop()}
-                          secondary={
-                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-                              {tableInfo.keyspace && (
-                                <Chip 
-                                  label={tableInfo.keyspace} 
-                                  size="small" 
-                                  variant="outlined"
-                                  color="primary"
-                                />
-                              )}
-                              <Typography variant="caption" component="span">
-                                PK: {primaryKeyColumns}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    );
-                  })}
-                </List>
+            <CardContent>
+              <FileUpload 
+                accept=".conf,.properties,.yaml,.yml"
+                multiple={false}
+                maxSize={1 * 1024 * 1024} // 1MB
+                onFilesSelected={handleConfFileSelected}
+                isLoading={isProcessing}
+                helperText="Optionally upload a configuration file for CQLGen"
+                buttonText="Select Config File"
+              />
+              
+              {confFile && (
+                <Alert 
+                  severity="info" 
+                  sx={{ mt: 2 }}
+                >
+                  Configuration file selected: {confFile.name}
+                </Alert>
               )}
             </CardContent>
-            
-            <Divider />
-            <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                {selectedTables.length} tables selected
-              </Typography>
-              <Button 
-                variant="contained" 
-                onClick={handleGenerateYaml}
-                disabled={!schemaData || selectedTables.length === 0 || isGeneratingYaml}
-                startIcon={isGeneratingYaml ? <CircularProgress size={20} /> : <StorageIcon />}
-              >
-                {isGeneratingYaml ? 'Generating...' : 'Generate YAML Files'}
-              </Button>
-            </Box>
           </Card>
         </Grid>
         
-        {/* Step 3: Generated YAML Files */}
-        {generatedYamlFiles && generatedYamlFiles.length > 0 && (
+        {/* Generate Button */}
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 3 }}>
+            <Button 
+              variant="contained" 
+              color="primary"
+              size="large"
+              onClick={handleGenerateYaml}
+              disabled={!schemaFile || isProcessing}
+              startIcon={isProcessing ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+            >
+              {isProcessing ? 'Generating...' : 'Generate YAML File'}
+            </Button>
+          </Box>
+        </Grid>
+        
+        {/* Generated YAML Result */}
+        {generatedYaml.content && (
           <Grid item xs={12}>
             <Card variant="outlined">
               <CardHeader 
-                title="Generated Write YAML Files" 
+                title="Generated YAML File" 
                 titleTypographyProps={{ variant: 'h6' }}
                 avatar={<DescriptionIcon color="primary" />}
                 action={
                   <Button
-                    size="small"
                     variant="outlined"
-                    startIcon={<DescriptionIcon />}
-                    onClick={handleDownloadYaml}
-                    disabled={!selectedYamlFile}
+                    startIcon={<CloudDownloadIcon />}
+                    onClick={downloadYaml}
                   >
                     Download
                   </Button>
@@ -377,46 +263,20 @@ const WriteYamlView = ({ onNext }) => {
               />
               <Divider />
               <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel id="yaml-file-select-label">Select YAML File</InputLabel>
-                      <Select
-                        labelId="yaml-file-select-label"
-                        id="yaml-file-select"
-                        value={selectedYamlFile}
-                        label="Select YAML File"
-                        onChange={handleYamlFileChange}
-                      >
-                        {generatedYamlFiles.map((file, index) => (
-                          <MenuItem key={index} value={file.filename}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <DescriptionIcon sx={{ mr: 1, fontSize: 20, color: 'primary.main' }} />
-                              {file.filename}
-                            </Box>
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Paper 
-                      variant="outlined" 
-                      sx={{ 
-                        p: 2, 
-                        bgcolor: 'grey.50', 
-                        maxHeight: '400px', 
-                        overflow: 'auto',
-                        fontFamily: 'monospace',
-                        fontSize: '0.85rem',
-                        whiteSpace: 'pre-wrap'
-                      }}
-                    >
-                      {selectedYamlContent}
-                    </Paper>
-                  </Grid>
-                </Grid>
+                <Paper 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'grey.50', 
+                    maxHeight: '400px', 
+                    overflow: 'auto',
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    whiteSpace: 'pre-wrap'
+                  }}
+                >
+                  {generatedYaml.content}
+                </Paper>
               </CardContent>
             </Card>
             
