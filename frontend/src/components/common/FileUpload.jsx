@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react'; // React removed
 import {
   Box,
   Button,
@@ -169,10 +169,10 @@ const FileUpload = ({
     if (onFilesSelected) onFilesSelected([]);
   };
   
-  // Clear errors
-  const clearErrors = () => {
-    setErrors([]);
-  };
+  // Clear errors (This function was unused)
+  // const clearErrors = () => {
+  //   setErrors([]);
+  // };
   
   return (
     <Box sx={{ width: '100%', ...sx }}>

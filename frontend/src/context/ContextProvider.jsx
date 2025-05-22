@@ -1,4 +1,4 @@
-import React from 'react';
+// React removed
 import { AppProvider } from './AppContext';
 import { SchemaProvider } from './SchemaContext';
 import { DSBulkProvider } from './DSBulkContext';

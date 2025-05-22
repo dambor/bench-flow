@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -17,14 +17,14 @@ import {
   ListItemIcon,
   CircularProgress,
   Chip,
-  Paper,
+  // Paper, // Unused
   List,
   ListItem,
   ListItemButton
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+// PlayArrowIcon, // Unused
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import StorageIcon from '@mui/icons-material/Storage';
+// StorageIcon, // Unused
 import TerminalIcon from '@mui/icons-material/Terminal';
 import DoneIcon from '@mui/icons-material/Done';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -41,15 +41,15 @@ import { useAppContext } from '../context/AppContext';
 
 const ReaderView = ({ onNext }) => {
   const { 
-    generatedReadYamlFiles,
-    csvPath,
-    primaryKeyColumns 
+    generatedReadYamlFiles
+    // csvPath, // Unused
+    // primaryKeyColumns // Unused
   } = useReadYamlContext();
   
   const {
-    isValidated,
-    nb5Path,
-    isValidating,
+    // isValidated, // Unused
+    // nb5Path, // Unused
+    // isValidating, // Unused
     executeNB5,
     generateCommand,
     activeExecution,
@@ -109,7 +109,7 @@ const ReaderView = ({ onNext }) => {
     }, 5000); // Poll every 5 seconds
     
     return () => clearInterval(interval);
-  }, [activeExecution]);
+  }, [activeExecution, listExecutions, getExecutionStatus]); // Added listExecutions and getExecutionStatus
   
   // Handle YAML tab change
   const handleYamlTabChange = (event, newValue) => {

@@ -1,5 +1,5 @@
 // Modified LoaderView.jsx with "Execute Workload" button removed
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -12,16 +12,16 @@ import {
   Grid,
   Divider,
   CircularProgress,
-  TextField,
-  Paper
+  TextField
+  // Paper removed (unused)
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+// PlayArrowIcon removed (unused)
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import SettingsIcon from '@mui/icons-material/Settings';
-import DescriptionIcon from '@mui/icons-material/Description';
-import DoneIcon from '@mui/icons-material/Done';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
+// SettingsIcon removed (unused)
+// DescriptionIcon removed (unused)
+// DoneIcon removed (unused)
+// CloudDownloadIcon removed (unused)
+// FileUploadIcon removed (unused)
 
 import CommandGenerator from '../components/common/CommandGenerator';
 import ConsoleViewer from '../components/common/ConsoleViewer';
@@ -34,14 +34,14 @@ const LoaderView = ({ onNext }) => {
   const {
     isValidated,
     nb5Path,
-    isValidating,
+    // isValidating, // Removed (unused)
     executeNB5,
     generateCommand,
     activeExecution,
     downloadScript
   } = useNB5Context();
   
-  const { generatedYaml, downloadYaml } = useYamlContext();
+  const { generatedYaml /*, downloadYaml */ } = useYamlContext(); // downloadYaml removed (unused)
   const { updateWorkflow, addNotification } = useAppContext();
   
   // State for managing YAML files

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'; // React removed, useCallback added
 import { dsbulkApi } from '../services/api';
 import { useAppContext } from './AppContext';
 
@@ -21,7 +21,7 @@ export const DSBulkProvider = ({ children }) => {
   const [activeExecution, setActiveExecution] = useState(null);
   
   // Validate that DSBulk JAR exists
-  const validateDSBulk = async () => {
+  const validateDSBulk = useCallback(async () => {
     setIsValidating(true);
     
     try {
@@ -46,12 +46,12 @@ export const DSBulkProvider = ({ children }) => {
       
       return result;
     } catch (error) {
-      setError(error);
+      setError(error); // setError and addNotification are from useAppContext
       throw error;
     } finally {
       setIsValidating(false);
     }
-  };
+  }, [setError, addNotification, setIsValidating, setIsValidated, setDsbulkPath]); // Added dependencies
   
   // Generate DSBulk commands based on given parameters
   const generateCommand = async (params) => {
@@ -186,7 +186,7 @@ export const DSBulkProvider = ({ children }) => {
   // Run validation on component mount
   useEffect(() => {
     validateDSBulk().catch(err => console.error('Initial DSBulk validation failed:', err));
-  }, []);
+  }, [validateDSBulk]); // Added validateDSBulk to dependency array
   
   // Value object that will be provided to consumers
   const contextValue = {

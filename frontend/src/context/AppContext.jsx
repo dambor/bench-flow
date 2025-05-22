@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react'; // React removed
 import { healthApi } from '../services/api';
 
 // Create the context
@@ -11,10 +11,9 @@ export const useAppContext = () => useContext(AppContext);
 export const AppProvider = ({ children }) => {
   // App state
   const [isBackendConnected, setIsBackendConnected] = useState(false);
-  const [lastError, setLastError] = useState(null);
+  // const [lastError, setLastError] = useState(null); // lastError was unused
   const [notifications, setNotifications] = useState([]);
   const [currentWorkflow, setCurrentWorkflow] = useState(null);
-  
 
   // Check if the backend is available
   useEffect(() => {
@@ -91,7 +90,7 @@ export const AppProvider = ({ children }) => {
   
   // Set an error and add an error notification
   const setError = (error) => {
-    setLastError(error);
+    // setLastError(error); // lastError was unused
     
     // Add an error notification
     addNotification({
@@ -301,7 +300,7 @@ export const AppProvider = ({ children }) => {
   // Value object that will be provided to consumers
   const contextValue = {
     isBackendConnected,
-    lastError,
+    // lastError, // lastError was unused
     notifications,
     currentWorkflow,
     addNotification,

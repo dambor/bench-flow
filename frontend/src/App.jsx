@@ -1,6 +1,6 @@
 // Updated App.jsx with the popup dialog removed
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import { 
   Box, 
   Typography, 

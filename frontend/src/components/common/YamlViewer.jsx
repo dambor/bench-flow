@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react'; // React removed
 import {
   Box,
   Paper,
@@ -122,10 +122,10 @@ const YamlViewer = ({ files = [], onDownload, title = "Generated YAML Files" }) 
             scrollButtons="auto"
             sx={{ px: 2 }}
           >
-            {files.map((file, index) => (
-              <Tab 
-                key={index} 
-                label={file.filename} 
+            {files.map((file) => ( // index removed
+              <Tab
+                key={file.filename} // Changed key to file.filename
+                label={file.filename}
                 sx={{ textTransform: 'none' }}
               />
             ))}

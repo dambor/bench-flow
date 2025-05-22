@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -43,7 +43,7 @@ import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import AddIcon from '@mui/icons-material/Add';
 import ReplayIcon from '@mui/icons-material/Replay';
 import DeleteIcon from '@mui/icons-material/Delete';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import MoreVertIcon from '@mui/icons-material/MoreVert'; // Uncommented to fix no-undef
 
 import { useAppContext } from '../context/AppContext';
 import { useSchemaContext } from '../context/SchemaContext';
@@ -730,19 +730,25 @@ function WorkflowItem({ workflow, onMenuOpen, onResume, onDelete }) {
               </IconButton>
             </Tooltip>
             <Tooltip title="Delete Workflow">
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={onDelete}
                 color="error"
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <IconButton 
-              size="small" 
-              onClick={onMenuOpen}
+            {/* IconButton that used MoreVertIcon was here, but onMenuOpen is passed.
+                Assuming the icon button itself was removed or is part of a different UI flow now.
+                If a menu button is desired here, it needs to be re-added with MoreVertIcon.
+                For now, onMenuOpen is passed but not directly tied to MoreVertIcon in this component.
+            */}
+            <IconButton
+              size="small"
+              onClick={onMenuOpen} // This implies a button should be here to trigger the menu
             >
-              <MoreVertIcon fontSize="small" />
+              <MoreVertIcon fontSize="small" /> 
+              {/* Re-adding MoreVertIcon as it's used by an IconButton, assuming this was the intent for onMenuOpen */}
             </IconButton>
           </Box>
         </Box>

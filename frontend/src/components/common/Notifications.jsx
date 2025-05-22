@@ -1,9 +1,9 @@
 // Updated Notifications.jsx component with simpler, less intrusive styling
 
-import React from 'react';
+// React removed
 import { 
   Snackbar, 
-  Alert, 
+  // Alert removed
   IconButton, 
   Slide,
   Box,

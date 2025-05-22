@@ -1,5 +1,5 @@
 // Modified UnloadView.jsx that parses the original CQL schema
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -8,26 +8,26 @@ import {
   Card,
   CardHeader,
   CardContent,
-  Alert,
+  Alert, // Alert is used
   Grid,
   Divider,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
-  ListItemIcon,
-  ListItemText,
+  // FormControl, // Unused
+  // InputLabel, // Unused
+  // Select, // Unused
+  // MenuItem, // Unused
+  // FormHelperText, // Unused
+  // ListItemIcon, // Unused
+  // ListItemText, // Unused
   CircularProgress
 } from '@mui/material';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import TerminalIcon from '@mui/icons-material/Terminal';
+// FolderOpenIcon, // Unused
+// TerminalIcon, // Unused
 import DoneIcon from '@mui/icons-material/Done';
-import StorageIcon from '@mui/icons-material/Storage';
+// StorageIcon, // Unused
 
 import CommandGenerator from '../components/common/CommandGenerator';
 import ConsoleViewer from '../components/common/ConsoleViewer';
@@ -35,13 +35,13 @@ import FileUpload from '../components/common/FileUpload';
 import { useSchemaContext } from '../context/SchemaContext';
 import { useDSBulkContext } from '../context/DSBulkContext';
 import { useAppContext } from '../context/AppContext';
-import { schemaApi } from '../services/api';
+// import { schemaApi } from '../services/api'; // Unused
 
 const UnloadView = ({ onNext }) => {
   const { 
     schemaData,
-    parseSchema,
-    isParsingSchema
+    parseSchema
+    // isParsingSchema // Unused
   } = useSchemaContext();
   
   const {

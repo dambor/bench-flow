@@ -89,12 +89,12 @@ function createFormData(data) {
     // Handle files specifically
     if (value instanceof File) {
       formData.append(key, value);
-    } 
+    }
     // Special handling for yaml_content to ensure it's treated properly
     else if (key === 'yaml_content' && typeof value === 'string') {
       // Create a blob to ensure proper submission as a file
       const yamlBlob = new Blob([value], { type: 'text/plain' });
-      formData.append(key, yamlBlob, 'content.yaml');
+      formData.append(key, yamlBlob, 'content.yaml'); // Corrected: append yamlBlob
     }
     // Handle arrays or objects by converting to JSON string
     else if (typeof value === 'object' && value !== null) {
@@ -158,36 +158,44 @@ export const dsbulkApi = {
   
   // Generate DSBulk commands
   generateCommands: async (params) => {
-    const formData = createFormData(params);
-    
+    // Backend expects DSBulkConfig (JSON)
     return fetchWithErrorHandling(`${API_BASE_URL}/dsbulk/generate-commands`, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
     });
   },
-  
+
   // Execute a DSBulk command
-  executeCommand: async (command, saveOutput = false) => {
-    const formData = new FormData();
-    formData.append('command', command);
-    formData.append('save_output', saveOutput);
-    
+  executeCommand: async (commandString, saveOutput = false) => {
+    // Backend expects DSBulkExecuteRequest: {"command_args": List[str], "save_output": bool}
+    const payload = {
+      command_args: commandString.split(' '), // Simple split, might need refinement for complex commands
+      save_output: saveOutput
+    };
     return fetchWithErrorHandling(`${API_BASE_URL}/dsbulk/execute`, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
   },
-  
+
   // Download a DSBulk script
   downloadScript: async (params) => {
-    const formData = createFormData(params);
-    
+    // Backend expects DSBulkDownloadScriptRequest (JSON)
     // This endpoint returns a file for download
     const response = await fetch(`${API_BASE_URL}/dsbulk/download-script`, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
     });
-    
+
     if (!response.ok) {
       let errorMessage;
       try {
@@ -198,7 +206,6 @@ export const dsbulkApi = {
       }
       throw new Error(errorMessage);
     }
-    
     return response;
   }
 };
@@ -209,56 +216,35 @@ export const nb5Api = {
   validate: async () => {
     return fetchWithErrorHandling(`${API_BASE_URL}/nb5/validate`);
   },
-  
+
   // Generate NB5 command
   generateCommand: async (params) => {
-    const formData = createFormData(params);
-    
+    // Backend expects NB5GenerateCommandRequest (JSON)
     return fetchWithErrorHandling(`${API_BASE_URL}/nb5/generate-command`, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
     });
   },
-  
-  // Execute NB5 command - UPDATED to handle file path properly
+
+  // Execute NB5 command
   executeNb5: async (params) => {
-    // Log that we're executing with file path if available
-    if (params.yaml_file) {
-      console.log('Executing NB5 with file path:', params.yaml_file);
-    }
-    
-    // If both yaml_file and yaml_content are provided, prefer yaml_file
-    if (params.yaml_file && params.yaml_content) {
-      console.log('Both yaml_file and yaml_content provided - using yaml_file');
-      const paramsWithoutContent = { ...params };
-      delete paramsWithoutContent.yaml_content;
-      
-      try {
-        return await fetchWithErrorHandling(`${API_BASE_URL}/nb5/execute`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(paramsWithoutContent)
-        });
-      } catch (error) {
-        console.error('Error executing with yaml_file:', error);
-        throw error;
-      }
-    }
-    
-    // Otherwise, proceed with normal form data method
-    const apiFormData = createFormData(params);
-    
-    // Log the keys being sent (but not the actual content for security)
-    console.log('Sending form data keys:', Object.keys(params));
-    
+    // Backend expects NB5ExecuteRequest (JSON), which includes yaml_content (string).
+    // The `params` object should be structured to match NB5ExecuteRequest.
+    // If `params.yaml_file` is present and intended to be used instead of `yaml_content`,
+    // the backend endpoint or Pydantic model would need to support it.
+    // Assuming `params` is already correctly structured for the JSON payload.
+    // The previous special handling for `yaml_file` vs `yaml_content` in the client
+    // is removed to simplify; the caller should form the correct `params` object.
     return fetchWithErrorHandling(`${API_BASE_URL}/nb5/execute`, {
       method: 'POST',
-      body: apiFormData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
     });
   },
-  
+
   // Get execution status
   getExecutionStatus: async (executionId) => {
     const maxRetries = 3;
@@ -296,14 +282,13 @@ export const nb5Api = {
   
   // Download NB5 script
   downloadScript: async (params) => {
-    const formData = createFormData(params);
-    
-    // This endpoint returns a file for download
+    // Backend expects NB5DownloadScriptRequest (JSON)
     const response = await fetch(`${API_BASE_URL}/nb5/download-script`, {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params) // Send params object as JSON
     });
-    
+
     if (!response.ok) {
       let errorMessage;
       try {
@@ -398,15 +383,18 @@ export const readYamlApi = {
   },
   
   // Generate a read YAML file and return JSON response
-  generateReadYamlJson: async (writeYamlFile, csvPath, primaryKeyColumns) => {
-    const formData = new FormData();
-    formData.append('write_yaml_file', writeYamlFile);
-    formData.append('csv_path', csvPath);
-    formData.append('primary_key_columns', primaryKeyColumns);
-    
+  generateReadYamlJson: async (writeYamlJsonData, csvPath, primaryKeyColumnsString) => {
+    // Backend expects ReadYamlJsonRequest (JSON)
+    // writeYamlJsonData should be a JS object representing the YAML structure
+    const payload = {
+      write_yaml_json: writeYamlJsonData,
+      csv_path: csvPath,
+      primary_key_columns: primaryKeyColumnsString
+    };
     return fetchWithErrorHandling(`${API_BASE_URL}/generate-read-yaml-json`, {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
   }
 };

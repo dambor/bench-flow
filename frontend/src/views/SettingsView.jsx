@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -12,13 +12,13 @@ import {
   Switch,
   FormControlLabel,
   Grid,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Paper,
+  Alert, // Alert is used
+  // List, // Unused
+  // ListItem, // Unused
+  // ListItemText, // Unused
+  // ListItemSecondaryAction, // Unused
+  // IconButton, // Unused
+  // Paper, // Unused
   Tab,
   Tabs
 } from '@mui/material';

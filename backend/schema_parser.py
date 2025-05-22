@@ -1,35 +1,56 @@
-from typing import Dict, List, Tuple, Optional, Any, Set
+from typing import Dict, List, Tuple, Optional, Any # Removed Set, io
 import re
 import yaml
-import io
-import os
+# import io # Not used directly
+import os # Ensure os is imported if used, e.g. os.path.basename
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+# Custom Exceptions
+class SchemaParserError(Exception):
+    """Base class for errors in the schema parser."""
+    pass
+
+class TableNotFoundError(SchemaParserError):
+    """Raised when a table is not found in the schema."""
+    pass
+
+class YamlGenerationError(SchemaParserError):
+    """Raised when there is an error generating YAML."""
+    pass
 
 
 class CQLParser:
     def __init__(self):
         # Regular expressions for parsing CQL
         self.keyspace_pattern = re.compile(
-            r"CREATE\s+KEYSPACE\s+(\w+)\s+WITH\s+replication\s*=\s*({[^}]+})\s*(?:AND\s+durable_writes\s*=\s*(true|false))?",
+            r"CREATE\s+KEYSPACE\s+(\w+)\s+WITH\s+replication\s*=\s*"
+            r"({[^}]+})\s*(?:AND\s+durable_writes\s*=\s*(true|false))?",
             re.IGNORECASE | re.DOTALL
         )
-        
+
         self.table_pattern = re.compile(
-            r"CREATE\s+TABLE\s+(?:if\s+not\s+exists\s+)?(?:(\w+)\.)?(\w+)\s*\(\s*([^;]+?)\s*\)\s*(?:WITH[^;]+)?;",
+            r"CREATE\s+TABLE\s+(?:if\s+not\s+exists\s+)?(?:(\w+)\.)?(\w+)\s*\("
+            r"\s*([^;]+?)\s*\)\s*(?:WITH[^;]+)?;",
             re.IGNORECASE | re.DOTALL
         )
-        
+
         self.type_pattern = re.compile(
-            r"CREATE\s+TYPE\s+(?:if\s+not\s+exists\s+)?(?:(\w+)\.)?(\w+)\s*\(\s*([^;]+?)\s*\)\s*;",
+            r"CREATE\s+TYPE\s+(?:if\s+not\s+exists\s+)?(?:(\w+)\.)?(\w+)\s*\("
+            r"\s*([^;]+?)\s*\)\s*;",
             re.IGNORECASE | re.DOTALL
         )
-        
+
         self.index_pattern = re.compile(
-            r"CREATE\s+INDEX\s+(?:if\s+not\s+exists\s+)?(\w+)\s+ON\s+(?:(\w+)\.)?(\w+)\s*\(([^)]+)\);",
+            r"CREATE\s+INDEX\s+(?:if\s+not\s+exists\s+)?(\w+)\s+ON\s+"
+            r"(?:(\w+)\.)?(\w+)\s*\(([^)]+)\);",
             re.IGNORECASE | re.DOTALL
         )
-        
+
         self.primary_key_pattern = re.compile(
-            r"PRIMARY\s+KEY\s*\(\s*([^)]+)\s*\)",
+            r"PRIMARY\s+KEY\s*\(\s*([^)]+)\s*\)",  # No change needed here
             re.IGNORECASE
         )
         
@@ -52,134 +73,146 @@ class CQLParser:
 
     def parse_cql(self, cql_content: str) -> Dict[str, Any]:
         """Parse CQL content and return structured schema information"""
-        result = {
-            "keyspaces": {},
-            "tables": {},
-            "types": {},
-            "indices": []
-        }
-        
-        # Extract keyspaces
-        keyspace_matches = self.keyspace_pattern.finditer(cql_content)
-        for match in keyspace_matches:
-            keyspace_name = match.group(1)
-            replication = match.group(2)
-            durable_writes = match.group(3) if match.group(3) else "true"
-            
-            result["keyspaces"][keyspace_name] = {
-                "replication": replication,
-                "durable_writes": durable_writes == "true"
+        if not cql_content or not cql_content.strip():
+            raise SchemaParserError("Input CQL content is empty or contains only whitespace.")
+        try:
+            result = {
+                "keyspaces": {},
+                "tables": {},
+                "types": {},
+                "indices": []
             }
-        
-        # Extract UDTs
-        type_matches = self.type_pattern.finditer(cql_content)
-        for match in type_matches:
-            keyspace_name = match.group(1) if match.group(1) else None
-            type_name = match.group(2)
-            fields_str = match.group(3)
             
-            fields = {}
-            for field_def in re.split(r',\s*(?=\w+\s+\w+)', fields_str):
-                field_parts = field_def.strip().split(None, 1)
-                if len(field_parts) == 2:
-                    field_name, field_type = field_parts
-                    fields[field_name.strip()] = field_type.strip()
-            
-            if keyspace_name:
-                full_type_name = f"{keyspace_name}.{type_name}"
-            else:
-                full_type_name = type_name
+            has_parsed_anything = False
+
+            # Extract keyspaces
+            keyspace_matches = self.keyspace_pattern.finditer(cql_content)
+            for match in keyspace_matches:
+                has_parsed_anything = True
+                keyspace_name = match.group(1)
+                replication = match.group(2)
+                durable_writes = match.group(3) if match.group(3) else "true"
                 
-            result["types"][full_type_name] = {
-                "keyspace": keyspace_name,
-                "name": type_name,
-                "fields": fields
-            }
-        
-        # Extract tables
-        table_matches = self.table_pattern.finditer(cql_content)
-        for match in table_matches:
-            keyspace_name = match.group(1) if match.group(1) else None
-            table_name = match.group(2)
-            column_definitions = match.group(3)
+                result["keyspaces"][keyspace_name] = {
+                    "replication": replication,
+                    "durable_writes": durable_writes == "true"
+                }
             
-            # Find the WITH clause for this table
-            table_with_clause = self._extract_with_clause(cql_content, keyspace_name, table_name)
-            
-            # Parse columns, primary key, and clustering order
-            columns, primary_key, clustering_order = self._parse_column_definitions(column_definitions)
-            
-            if keyspace_name:
-                full_table_name = f"{keyspace_name}.{table_name}"
-            else:
-                full_table_name = table_name
+            # Extract UDTs
+            type_matches = self.type_pattern.finditer(cql_content)
+            for match in type_matches:
+                has_parsed_anything = True
+                keyspace_name = match.group(1) if match.group(1) else None
+                type_name = match.group(2)
+                fields_str = match.group(3)
                 
-            result["tables"][full_table_name] = {
-                "keyspace": keyspace_name,
-                "name": table_name,
-                "columns": columns,
-                "primary_key": primary_key,
-                "clustering_order": clustering_order,
-                "with_options": table_with_clause
-            }
-        
-        # Extract indices
-        index_matches = self.index_pattern.finditer(cql_content)
-        for match in index_matches:
-            index_name = match.group(1)
-            keyspace_name = match.group(2) if match.group(2) else None
-            table_name = match.group(3)
-            indexed_columns = match.group(4).strip()
-            
-            if keyspace_name:
-                full_table_name = f"{keyspace_name}.{table_name}"
-            else:
-                full_table_name = table_name
+                fields = {}
+                for field_def in re.split(r',\s*(?=\w+\s+\w+)', fields_str):
+                    field_parts = field_def.strip().split(None, 1)
+                    if len(field_parts) == 2:
+                        field_name, field_type = field_parts
+                        fields[field_name.strip()] = field_type.strip()
                 
-            result["indices"].append({
-                "name": index_name,
-                "table": full_table_name,
-                "columns": indexed_columns
-            })
-        
-        return result
+                if not fields: # Check if UDT has fields
+                    raise SchemaParserError(f"No fields found for TYPE {type_name}. Check CQL syntax.")
+
+                if keyspace_name:
+                    full_type_name = f"{keyspace_name}.{type_name}"
+                else:
+                    full_type_name = type_name
+                    
+                result["types"][full_type_name] = {
+                    "keyspace": keyspace_name,
+                    "name": type_name,
+                    "fields": fields
+                }
+            
+            # Extract tables
+            table_matches = self.table_pattern.finditer(cql_content)
+            for match in table_matches:
+                has_parsed_anything = True
+                keyspace_name = match.group(1) if match.group(1) else None
+                table_name_val = match.group(2) 
+                column_definitions = match.group(3)
+                
+                table_with_clause = self._extract_with_clause(cql_content, keyspace_name, table_name_val)
+                columns, primary_key, clustering_order = self._parse_column_definitions(column_definitions)
+                
+                if not columns:
+                    raise SchemaParserError(f"No columns found or parsed for table '{table_name_val}'. Check CQL syntax or table definition.")
+                if not primary_key:
+                    raise SchemaParserError(f"PRIMARY KEY not found or parsed for table '{table_name_val}'. Check CQL syntax.")
+
+
+                if keyspace_name:
+                    full_table_name = f"{keyspace_name}.{table_name_val}"
+                else:
+                    full_table_name = table_name_val
+                    
+                result["tables"][full_table_name] = {
+                    "keyspace": keyspace_name,
+                    "name": table_name_val,
+                    "columns": columns,
+                    "primary_key": primary_key,
+                    "clustering_order": clustering_order,
+                    "with_options": table_with_clause
+                }
+            
+            # Extract indices
+            index_matches = self.index_pattern.finditer(cql_content)
+            for match in index_matches:
+                has_parsed_anything = True
+                index_name = match.group(1)
+                keyspace_name = match.group(2) if match.group(2) else None
+                table_name_val = match.group(3) 
+                indexed_columns = match.group(4).strip()
+                
+                if keyspace_name:
+                    full_table_name = f"{keyspace_name}.{table_name_val}"
+                else:
+                    full_table_name = table_name_val
+                    
+                result["indices"].append({
+                    "name": index_name,
+                    "table": full_table_name,
+                    "columns": indexed_columns
+                })
+            
+            if not has_parsed_anything and cql_content.strip(): 
+                 raise SchemaParserError("Could not parse any valid CQL statements. Input might be empty or malformed.")
+
+            return result
+        except SchemaParserError as spe: 
+            raise spe
+        except Exception as e:
+            logger.error(f"Error during CQL parsing: {e}", exc_info=True)
+            raise SchemaParserError(f"Failed to parse CQL: {str(e)}")
 
     def _extract_with_clause(self, cql_content: str, keyspace_name: Optional[str], table_name: str) -> Dict[str, Any]:
         """Extract the WITH clause for a table"""
-        pattern = rf"CREATE\s+TABLE\s+(?:if\s+not\s+exists\s+)?(?:{keyspace_name}\.)?\s*{table_name}[^;]+?WITH\s+([^;]+)"
-        match = re.search(pattern, cql_content, re.IGNORECASE | re.DOTALL)
-        
+        # Adjusted regex to be slightly more robust and avoid potential ReDoS with [^;]+
+        pattern_str = (
+            r"CREATE\s+TABLE\s+(?:if\s+not\s+exists\s+)?"
+            rf"(?:{keyspace_name}\.)?{re.escape(table_name)}\s*\([^)]*\)\s*WITH\s+([^;]+);"
+        )
+        match = re.search(pattern_str, cql_content, re.IGNORECASE | re.DOTALL)
+
         if not match:
             return {}
-        
-        with_content = match.group(1)
+
+        with_content = match.group(1).strip()
         options = {}
         
-        # Handle nested structures like maps in options
-        current_option = ""
-        brace_level = 0
-        
-        for char in with_content + " AND ":  # Add a separator at the end
-            if char == '{':
-                brace_level += 1
-                current_option += char
-            elif char == '}':
-                brace_level -= 1
-                current_option += char
-            elif char == "'" and brace_level > 0:
-                current_option += char
-            elif brace_level == 0 and re.match(r'\s+AND\s+', char + with_content[with_content.index(char)+1:], re.IGNORECASE):
-                # Found the end of an option
-                if current_option.strip():
-                    key_value = current_option.strip().split('=', 1)
-                    if len(key_value) == 2:
-                        key, value = key_value
-                        options[key.strip()] = value.strip()
-                current_option = ""
-            else:
-                current_option += char
+        # More robust parsing for 'key = value AND key = value'
+        # This regex handles simple options, not deeply nested ones.
+        option_pattern = re.compile(r"(\w+)\s*=\s*([^(\sAND\s)]+|\{[^}]*\}|'[^']*')")
+        for opt_match in option_pattern.finditer(with_content):
+            key = opt_match.group(1).strip()
+            value = opt_match.group(2).strip()
+            options[key] = value
         
         return options
+
 
     def _parse_column_definitions(self, column_defs: str) -> Tuple[Dict[str, str], List[List[str]], Dict[str, str]]:
         """Parse column definitions, extract primary key and clustering order"""
@@ -237,7 +270,8 @@ class CQLParser:
         if cql_type == 'uuid':
             return 'ToHashedUUID()'
         elif cql_type == 'timestamp':
-            return "AddHashRange(0,2419200000L); StartingEpochMillis('2025-01-01 05:00:00'); ToJavaInstant()"
+            return ("AddHashRange(0,2419200000L); "
+                    "StartingEpochMillis('2025-01-01 05:00:00'); ToJavaInstant()")
         elif cql_type == 'boolean':
             return 'AddCycleRange(0,1); ToBoolean()'
         elif cql_type == 'text' or cql_type == 'varchar':
@@ -265,18 +299,31 @@ class CQLParser:
     def generate_nosqlbench_yaml(self, cql_schema: Dict[str, Any], table_name: str) -> str:
         """Generate NoSQLBench YAML for a specific table"""
         # Find the table in the schema
+        if not cql_schema or not isinstance(cql_schema.get("tables"), dict): # Check if "tables" key exists and is a dict
+            raise YamlGenerationError(f"Invalid or empty schema provided to generate_nosqlbench_yaml for table '{table_name}'. Schema 'tables' key missing or not a dictionary.")
+
         table_info = None
         for full_name, info in cql_schema["tables"].items():
-            if full_name == table_name or info["name"] == table_name:
+            if full_name == table_name or info.get("name") == table_name: 
                 table_info = info
                 break
         
         if not table_info:
-            return f"# Table {table_name} not found in the schema"
+            raise TableNotFoundError(f"Table '{table_name}' not found in the schema.")
         
         # Determine the keyspace
-        keyspace_name = table_info["keyspace"]
-        
+        # Allow keyspace to be None (default will be used in template)
+        keyspace_name = table_info.get("keyspace") 
+        table_name_only = table_info.get("name")
+        columns = table_info.get("columns")
+
+        if not table_name_only: # Keyspace can be None, but table name and columns must exist
+            raise YamlGenerationError(f"Table name is missing for '{table_name}' in the parsed schema.")
+        if not columns:
+             raise YamlGenerationError(f"Columns are missing for table '{table_name_only}' in the parsed schema.")
+        if not table_info.get("primary_key"):
+            raise YamlGenerationError(f"Primary key not found or parsed for table '{table_name_only}'. Cannot generate YAML.")
+
         # Start building the YAML
         yaml_content = [
             "scenarios:",
@@ -323,7 +370,9 @@ class CQLParser:
             
             pk_definition = f"        PRIMARY KEY ({', '.join(pk_parts)})"
             columns_lines.append(pk_definition)
-        
+        elif not table_info.get("primary_key"): # Check if primary_key list is empty or key missing
+            raise YamlGenerationError(f"Primary key not found or parsed for table '{table_name_only}'. Cannot generate YAML.")
+
         yaml_content.extend(columns_lines)
         yaml_content.append("        )")
         
@@ -365,142 +414,152 @@ class CQLParser:
         
         return "\n".join(yaml_content)
 
-def generate_read_yaml_from_write_and_csv(
-    self, 
-    write_yaml: str, 
-    csv_file_path: str, 
-    primary_key_columns: List[str]
-) -> str:
-    """Generate a read YAML file from a write YAML file, DSBulk CSV path, and primary key columns"""
-    try:
-        # Preprocess the YAML to fix common syntax issues
-        preprocessed_yaml = self._preprocess_yaml(write_yaml)
+    # def generate_read_yaml_from_write_and_csv( # This method is not in this class, it's in read_yaml_generator.py
+    # self, 
+    # write_yaml: str, 
+    # csv_file_path: str, 
+    # primary_key_columns: List[str]
+# ) -> str:
+    # """Generate a read YAML file from a write YAML file, DSBulk CSV path, and primary key columns"""
+    # try:
+    #     # Preprocess the YAML to fix common syntax issues
+    #     preprocessed_yaml = self._preprocess_yaml(write_yaml)
         
-        # Extract the write YAML to get the table name
-        yaml_data = None
-        try:
-            yaml_data = yaml.safe_load(preprocessed_yaml)
-        except Exception as e:
-            # If still failing, try a regex-based approach
-            return self._generate_read_yaml_from_text(preprocessed_yaml, csv_file_path, primary_key_columns)
+    #     # Extract the table name from the write YAML
+    #     yaml_data = None
+    #     try:
+    #         yaml_data = yaml.safe_load(preprocessed_yaml)
+    #     except yaml.YAMLError as ye:
+    #         logger.warning(f"YAML parsing failed, attempting regex fallback: {ye}")
+    #         # If still failing, try a regex-based approach
+    #         return self._generate_read_yaml_from_text(preprocessed_yaml, csv_file_path, primary_key_columns)
+    #     except Exception as e: # Catch other potential errors during loading
+    #         raise YamlGenerationError(f"Error loading write YAML content: {str(e)}")
+
+    #     # Extract table name from the write YAML
+    #     table_name = None
+    #     keyspace = 'baselines'  # Default keyspace
         
-        # Extract table name from the write YAML
-        table_name = None
-        keyspace = 'baselines'  # Default keyspace
+    #     if yaml_data and 'blocks' in yaml_data:
+    #         for block_name, block_data in yaml_data['blocks'].items():
+    #             if 'ops' in block_data:
+    #                 for op_name, op_value in block_data['ops'].items():
+    #                     if isinstance(op_value, str) and 'insert into' in op_value.lower():
+    #                         # Extract table name from insert statement
+    #                         table_match = self.insert_table_pattern.search(op_value)
+    #                         if table_match:
+    #                             if table_match.group(1):
+    #                                 keyspace = table_match.group(1)
+    #                             table_name = table_match.group(2)
+    #                             break
+    #                 if table_name:
+    #                     break
         
-        if yaml_data and 'blocks' in yaml_data:
-            for block_name, block_data in yaml_data['blocks'].items():
-                if 'ops' in block_data:
-                    for op_name, op_value in block_data['ops'].items():
-                        if isinstance(op_value, str) and 'insert into' in op_value.lower():
-                            # Extract table name from insert statement
-                            table_match = self.insert_table_pattern.search(op_value)
-                            if table_match:
-                                if table_match.group(1):
-                                    keyspace = table_match.group(1)
-                                table_name = table_match.group(2)
-                                break
-                    if table_name:
-                        break
+    #     if not table_name:
+    #         # Try to extract from CREATE TABLE statement
+    #         if yaml_data and 'blocks' in yaml_data:
+    #             for block_name, block_data in yaml_data['blocks'].items():
+    #                 if 'ops' in block_data:
+    #                     for op_name, op_value in block_data['ops'].items():
+    #                         if isinstance(op_value, str) and 'CREATE TABLE' in op_value:
+    #                             # Extract table name from create statement
+    #                             table_match = re.search(r'CREATE\s+TABLE\s+if\s+not\s+exists\s+<<keyspace:([^>]+)>>\.(\w+)', op_value)
+    #                             if table_match:
+    #                                 keyspace = table_match.group(1)
+    #                                 table_name = table_match.group(2)
+    #                                 break
+    #                             # Try alternative pattern
+    #                             alt_match = re.search(r'CREATE\s+TABLE\s+if\s+not\s+exists\s+(\w+)\.(\w+)', op_value)
+    #                             if alt_match:
+    #                                 keyspace = alt_match.group(1)
+    #                                 table_name = alt_match.group(2)
+    #                                 break
+    #                     if table_name:
+    #                         break
         
-        if not table_name:
-            # Try to extract from CREATE TABLE statement
-            if yaml_data and 'blocks' in yaml_data:
-                for block_name, block_data in yaml_data['blocks'].items():
-                    if 'ops' in block_data:
-                        for op_name, op_value in block_data['ops'].items():
-                            if isinstance(op_value, str) and 'CREATE TABLE' in op_value:
-                                # Extract table name from create statement
-                                table_match = re.search(r'CREATE\s+TABLE\s+if\s+not\s+exists\s+<<keyspace:([^>]+)>>\.(\w+)', op_value)
-                                if table_match:
-                                    keyspace = table_match.group(1)
-                                    table_name = table_match.group(2)
-                                    break
-                                # Try alternative pattern
-                                alt_match = re.search(r'CREATE\s+TABLE\s+if\s+not\s+exists\s+(\w+)\.(\w+)', op_value)
-                                if alt_match:
-                                    keyspace = alt_match.group(1)
-                                    table_name = alt_match.group(2)
-                                    break
-                        if table_name:
-                            break
+    #     if not table_name:
+    #         # Try to find table name in the filename
+    #         if hasattr(write_yaml, 'filename'): # This check is problematic if write_yaml is a string
+    #             filename = write_yaml.filename
+    #             parts = os.path.basename(filename).split('_')
+    #             if len(parts) > 0:
+    #                 table_name = parts[-1].split('.')[0]
         
-        if not table_name:
-            # Try to find table name in the filename
-            if hasattr(write_yaml, 'filename'):
-                filename = write_yaml.filename
-                parts = os.path.basename(filename).split('_')
-                if len(parts) > 0:
-                    table_name = parts[-1].split('.')[0]
+    #     if not table_name:
+    #         # If table name still not found, use regex fallback on the original content
+    #         # This is a bit redundant if yaml.safe_load worked, but kept for consistency with original logic flow
+    #         logger.info("Table name not found through parsed YAML, trying regex on original content.")
+    #         return self._generate_read_yaml_from_text(preprocessed_yaml, csv_file_path, primary_key_columns)
+
+    #     # Determine columns for the select statement
+    #     columns = []
         
-        if not table_name:
-            return "# Error: Could not determine table name from write YAML"
+    #     # Always include the primary key columns
+    #     columns.extend(primary_key_columns)
         
-        # Determine columns for the select statement
-        columns = []
+    #     # Try to find other columns that might be interesting for read operations
+    #     timestamp_cols = ['insertedtimestamp', 'created_at', 'timestamp', 'last_updated']
+    #     if yaml_data and 'bindings' in yaml_data:
+    #         for col in timestamp_cols:
+    #             if col in yaml_data['bindings']:
+    #                 if col not in columns:
+    #                     columns.append(col)
         
-        # Always include the primary key columns
-        columns.extend(primary_key_columns)
+    #     # If no timestamp column found, add a default one
+    #     if not any(col in columns for col in timestamp_cols):
+    #         columns.append('insertedtimestamp')
         
-        # Try to find other columns that might be interesting for read operations
-        timestamp_cols = ['insertedtimestamp', 'created_at', 'timestamp', 'last_updated']
-        for col in timestamp_cols:
-            if yaml_data and 'bindings' in yaml_data and col in yaml_data['bindings']:
-                if col not in columns:
-                    columns.append(col)
+    #     # Create the read YAML
+    #     read_yaml_lines = [
+    #         "scenarios:",
+    #         "  default:",
+    #         f"    read1: run driver=cql tags='block:read1' cycles==TEMPLATE(read-cycles,1000) threads=auto",
+    #         "",
+    #         "bindings:"
+    #     ]
         
-        # If no timestamp column found, add a default one
-        if not any(col in columns for col in timestamp_cols):
-            columns.append('insertedtimestamp')
+    #     # Primary key in CSVSampler format
+    #     primary_key_column = primary_key_columns[0]  # Use the first primary key column for CSVSampler
+    #     read_yaml_lines.append(f"  {primary_key_column}: CSVSampler('{primary_key_column}','{primary_key_column}-weight','{csv_file_path}');")
+    #     read_yaml_lines.append("")
         
-        # Create the read YAML
-        read_yaml_lines = [
-            "scenarios:",
-            "  default:",
-            f"    read1: run driver=cql tags='block:read1' cycles==TEMPLATE(read-cycles,1000) threads=auto",
-            "",
-            "bindings:"
-        ]
+    #     # Add blocks section
+    #     read_yaml_lines.extend([
+    #         "blocks:",
+    #         "  read1:",
+    #         "    params:",
+    #         "      cl: TEMPLATE(read_cl,LOCAL_QUORUM)",
+    #         "      instrument: true",
+    #         "      prepared: true",
+    #         "    ops:",
+    #         f"      read_by_{primary_key_column}: |"
+    #     ])
         
-        # Primary key in CSVSampler format
-        primary_key_column = primary_key_columns[0]  # Use the first primary key column for CSVSampler
-        read_yaml_lines.append(f"  {primary_key_column}: CSVSampler('{primary_key_column}','{primary_key_column}-weight','{csv_file_path}');")
-        read_yaml_lines.append("")
+    #     # Create a SELECT statement with primary key as WHERE clause
+    #     selected_columns_str = ", ".join(f'"{c}"' for c in columns) # Quote column names
+    #     select_statement = [
+    #         f"        SELECT {selected_columns_str}",
+    #         f"        FROM <<keyspace:{keyspace}>>.{table_name}",
+    #         f"        WHERE \"{primary_key_column}\" = {{{primary_key_column}}}" # Quote PK column
+    #     ]
         
-        # Add blocks section
-        read_yaml_lines.extend([
-            "blocks:",
-            "  read1:",
-            "    params:",
-            "      cl: TEMPLATE(read_cl,LOCAL_QUORUM)",
-            "      instrument: true",
-            "      prepared: true",
-            "    ops:",
-            f"      read_by_{primary_key_column}: |"
-        ])
+    #     # Add additional primary key columns to WHERE clause if any
+    #     for i, pk_col in enumerate(primary_key_columns[1:], 1):
+    #         select_statement.append(f"        AND \"{pk_col}\" = {{{pk_col}}}") # Quote PK column
         
-        # Create a SELECT statement with primary key as WHERE clause
-        selected_columns = ", ".join(columns)
-        select_statement = [
-            f"        SELECT {selected_columns}",
-            f"        FROM <<keyspace:{keyspace}>>.{table_name}",
-            f"        WHERE {primary_key_column} = {{{primary_key_column}}}"
-        ]
+    #     select_statement.append("        LIMIT 1;")
         
-        # Add additional primary key columns to WHERE clause if any
-        for i, pk_col in enumerate(primary_key_columns[1:], 1):
-            select_statement.append(f"        AND {pk_col} = {{{pk_col}}}")
+    #     # Add select statement to YAML
+    #     read_yaml_lines.extend(select_statement)
         
-        select_statement.append("        LIMIT 1;")
-        
-        # Add select statement to YAML
-        read_yaml_lines.extend(select_statement)
-        
-        return "\n".join(read_yaml_lines)
-            
-    except Exception as e:
-        # If there's an error, return a comment explaining the error
-        return f"# Error generating read YAML: {str(e)}"
+    #     return "\n".join(read_yaml_lines)
+                
+    # except YamlGenerationError: # Re-raise specific errors
+    #     raise
+    # except Exception as e:
+    #     # If there's an error, raise a YamlGenerationError
+    #     logger.error(f"Unexpected error in generate_read_yaml_from_write_and_csv: {str(e)}")
+    #     raise YamlGenerationError(f"Error generating read YAML: {str(e)}")
 
 def _preprocess_yaml(self, yaml_content: str) -> str:
     """Preprocess YAML content to fix common syntax issues"""

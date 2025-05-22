@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -7,27 +7,27 @@ import {
   Card,
   CardHeader,
   CardContent,
-  Alert,
+  Alert, // Alert is used
   Grid,
   Divider,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
-  Chip,
+  // FormControl, // Unused
+  // InputLabel, // Unused
+  // Select, // Unused
+  // MenuItem, // Unused
+  // FormHelperText, // Unused
+  // Chip, // Unused
   CircularProgress,
   Tabs,
-  Tab,
-  Paper
+  Tab
+  // Paper // Unused
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import SettingsIcon from '@mui/icons-material/Settings';
+// SettingsIcon removed (unused)
 import DoneIcon from '@mui/icons-material/Done';
 
 import FileUpload from '../components/common/FileUpload';
@@ -45,20 +45,20 @@ const ReadYamlView = ({ onNext }) => {
   const {
     generatedReadYamlFiles,
     isProcessing,
-    primaryKeyColumns,
-    csvPath,
+    // primaryKeyColumns, // Unused
+    // csvPath, // Unused
     processIngestionZip,
     processMultipleFiles,
-    processIngestionFile,
+    // processIngestionFile, // Unused
     generateReadYaml,
-    generateReadYamlJson,
+    // generateReadYamlJson, // Unused
     setPrimaryKeyColumns,
     setCsvPath
   } = useReadYamlContext();
   
-  const {
-    activeExecution
-  } = useDSBulkContext();
+  // const {
+  //   activeExecution // activeExecution itself is not directly used, its properties were, but that useEffect is removed
+  // } = useDSBulkContext(); 
   
   const { updateWorkflow } = useAppContext();
   
@@ -68,17 +68,7 @@ const ReadYamlView = ({ onNext }) => {
   const [csvPathInput, setCsvPathInput] = useState('');
   const [selectedWriteYaml, setSelectedWriteYaml] = useState(null);
   
-  // Set CSV path from DSBulk execution if available
-  useEffect(() => {
-    if (activeExecution && 
-        activeExecution.result && 
-        activeExecution.result.success && 
-        formValues && 
-        formValues.output_path) {
-      setCsvPathInput(formValues.output_path);
-      setCsvPath(formValues.output_path);
-    }
-  }, [activeExecution]);
+  // Removed useEffect that depended on activeExecution and undefined formValues
   
   // Update when read YAML files are generated
   useEffect(() => {

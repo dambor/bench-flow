@@ -1,5 +1,5 @@
 // Modified NB5Context.jsx with improved error handling and request formatting
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'; // React removed, useCallback added
 import { nb5Api } from '../services/api';
 import { useAppContext } from './AppContext';
 
@@ -23,7 +23,7 @@ export const NB5Provider = ({ children }) => {
   const [pollingInterval, setPollingInterval] = useState(null);
   
   // Validate that NB5 JAR exists
-  const validateNB5 = async () => {
+  const validateNB5 = useCallback(async () => {
     setIsValidating(true);
     
     try {
@@ -53,7 +53,7 @@ export const NB5Provider = ({ children }) => {
     } finally {
       setIsValidating(false);
     }
-  };
+  }, [setError, addNotification, setIsValidating, setIsValidated, setNB5Path]);
   
   // Generate NB5 command based on given parameters
   const generateCommand = async (params) => {
@@ -121,7 +121,7 @@ export const NB5Provider = ({ children }) => {
       /*
       const fixedParams = {
         ...params,
-        yaml_file: '/Users/glenio.borges/workspace/bench-flow/backend/sessions/710cf41d-e0ba-4004-a0a5-c7dbee641c47/output.yaml',
+        yaml_file: '/Users/your_user/path_to/output.yaml', // Example path
         yaml_content: undefined  // Remove yaml_content to force using the file
       };
       */
@@ -416,7 +416,7 @@ export const NB5Provider = ({ children }) => {
         clearInterval(pollingInterval);
       }
     };
-  }, []);
+  }, [validateNB5, listExecutions, pollingInterval]); // Added dependencies
   
   // Value object that will be provided to consumers
   const contextValue = {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Container,
@@ -32,7 +32,7 @@ const WriteYamlView = ({ onNext }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [schemaFile, setSchemaFile] = useState(null);
   const [confFile, setConfFile] = useState(null);
-  const [generatedResult, setGeneratedResult] = useState(null);
+  // const [generatedResult, setGeneratedResult] = useState(null); // Unused state variable
   
   // Handle schema file selection
   const handleSchemaFileSelected = (files) => {
@@ -40,11 +40,11 @@ const WriteYamlView = ({ onNext }) => {
     setSchemaFile(files[0]);
     
     // Log file information for debugging
-    console.log('Schema file selected:', {
-      name: files[0].name,
-      size: files[0].size,
-      type: files[0].type
-    });
+    // console.log('Schema file selected:', {
+    //   name: files[0].name,
+    //   size: files[0].size,
+    //   type: files[0].type
+    // });
   };
   
   // Handle configuration file selection
@@ -53,11 +53,11 @@ const WriteYamlView = ({ onNext }) => {
     setConfFile(files[0]);
     
     // Log file information for debugging
-    console.log('Configuration file selected:', {
-      name: files[0].name,
-      size: files[0].size,
-      type: files[0].type
-    });
+    // console.log('Configuration file selected:', {
+    //   name: files[0].name,
+    //   size: files[0].size,
+    //   type: files[0].type
+    // });
   };
   
   // Generate YAML using the cqlgen API
@@ -84,24 +84,24 @@ const WriteYamlView = ({ onNext }) => {
       });
       
       // Try the alternative API if available
-      let result;
+      let apiResult; // Renamed result to avoid confusion with generatedResult state
       try {
-        console.log('Attempting to use processWithSchema API first...');
-        result = await cqlgenApi.processWithSchema(schemaFile, confFile);
-        console.log('processWithSchema API succeeded:', result);
+        // console.log('Attempting to use processWithSchema API first...');
+        apiResult = await cqlgenApi.processWithSchema(schemaFile, confFile);
+        // console.log('processWithSchema API succeeded:', apiResult);
       } catch (firstError) {
-        console.error('Error with processWithSchema API:', firstError);
-        console.log('Falling back to generateYaml API...');
-        result = await cqlgenApi.generateYaml(schemaFile, confFile);
-        console.log('generateYaml API succeeded:', result);
+        // console.error('Error with processWithSchema API:', firstError);
+        // console.log('Falling back to generateYaml API...');
+        apiResult = await cqlgenApi.generateYaml(schemaFile, confFile);
+        // console.log('generateYaml API succeeded:', apiResult);
       }
       
-      setGeneratedResult(result);
+      // setGeneratedResult(apiResult); // Unused state variable
       
       // The generated YAML content is already stored in the YamlContext
       // by the API methods in the context
       
-      if (result.success) {
+      if (apiResult.success) {
         addNotification({
           type: 'success',
           title: 'YAML Generated',

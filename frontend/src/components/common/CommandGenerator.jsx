@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // React removed
 import {
   Box,
   Paper,
@@ -21,7 +21,7 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DownloadIcon from '@mui/icons-material/Download';
-import CodeIcon from '@mui/icons-material/Code';
+// CodeIcon removed
 import { useAppContext } from '../../context/AppContext';
 
 // Command Generator component for DSBulk and NB5 operations
@@ -46,19 +46,12 @@ const CommandGenerator = ({
   const [formValues, setFormValues] = useState(initialValues);
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
-  const [commandGenerated, setCommandGenerated] = useState(false);
+  // commandGenerated state and related useEffect removed as it was unused
   
   // Update form values when initialValues changes
   useEffect(() => {
     setFormValues(initialValues);
   }, [initialValues]);
-  
-  // Update formValues when currentCommand changes
-  useEffect(() => {
-    if (currentCommand) {
-      setCommandGenerated(true);
-    }
-  }, [currentCommand]);
   
   // Handle form input changes
   const handleInputChange = (event) => {
@@ -153,7 +146,7 @@ const CommandGenerator = ({
     // Call onGenerate with form values
     if (onGenerate && typeof onGenerate === 'function') {
       onGenerate(formValues);
-      setCommandGenerated(true);
+      // setCommandGenerated(true); // Removed as commandGenerated is unused
     }
   };
   
@@ -202,7 +195,7 @@ const CommandGenerator = ({
     setFormValues(initialValues);
     setTouched({});
     setErrors({});
-    setCommandGenerated(false);
+    // setCommandGenerated(false); // Removed as commandGenerated is unused
   };
   
   return (
