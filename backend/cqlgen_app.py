@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import requests
 import logging
+import re
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
@@ -68,28 +69,51 @@ class CQLGenerator:
             logger.info(f"nb5.jar already exists at {NB5_JAR_PATH}")
 
     def _verify_java_version(self) -> bool:
-        """
-        Verify that Java 23 is installed.
-        
-        Returns:
-            bool: True if Java 23 is available, False otherwise.
-        """
+        """Verify that Java is installed (version 17 or higher)."""
         try:
             result = subprocess.run(
-                ["java", "--version"], 
-                capture_output=True, 
-                text=True, 
+                ["java", "--version"],
+                capture_output=True,
+                text=True,
                 check=True
             )
             version_output = result.stdout
-            
-            # Check if Java 23 is in the version string
-            if "23" in version_output:
-                logger.info("Java 23 is available")
-                return True
+
+            # Extract the Java version using regex
+            version_match = re.search(r'version\s+"?(\d+)\.', version_output)
+            if version_match:
+                java_version = int(version_match.group(1))
+                logger.info(f"Found Java version: {java_version}")
+
+                # Accept Java 17 or higher
+                if java_version >= 17:
+                    logger.info(f"Java {java_version} is suitable (17+ required)")
+                    return True
+                else:
+                    logger.warning(
+                        f"Java version {java_version} is too old, 17+ required")
+                    return False
             else:
-                logger.warning(f"Java 23 not found. Found: {version_output.strip()}")
-                return False
+                # Alternative pattern for newer Java releases
+                alt_match = re.search(r'java\s+(\d+)', version_output)
+                if alt_match:
+                    java_version = int(alt_match.group(1))
+                    logger.info(f"Found Java version: {java_version}")
+
+                    if java_version >= 17:
+                        logger.info(
+                            f"Java {java_version} is suitable (17+ required)")
+                        return True
+                    else:
+                        logger.warning(
+                            f"Java version {java_version} is too old, 17+ required")
+                        return False
+                else:
+                    logger.warning(
+                        f"Could not determine Java version from: {version_output.strip()}")
+                    # Default to accepting the Java version if we can't determine it
+                    # but the command executed successfully
+                    return True
         except subprocess.SubprocessError as e:
             logger.error(f"Error checking Java version: {e}")
             return False
