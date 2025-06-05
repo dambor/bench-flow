@@ -35,13 +35,12 @@ const LoaderView = ({ onNext }) => {
     isValidated,
     nb5Path,
     isValidating,
-    executeNB5,
     generateCommand,
     activeExecution,
     downloadScript
   } = useNB5Context();
   
-  const { generatedYaml, downloadYaml } = useYamlContext();
+  const { generatedYaml } = useYamlContext();
   const { updateWorkflow, addNotification } = useAppContext();
   
   // State for managing YAML files

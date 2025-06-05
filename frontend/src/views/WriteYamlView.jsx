@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Container,
@@ -32,7 +32,7 @@ const WriteYamlView = ({ onNext }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [schemaFile, setSchemaFile] = useState(null);
   const [confFile, setConfFile] = useState(null);
-  const [generatedResult, setGeneratedResult] = useState(null);
+  const [_generatedResult, setGeneratedResult] = useState(null);
   
   // Handle schema file selection
   const handleSchemaFileSelected = (files) => {

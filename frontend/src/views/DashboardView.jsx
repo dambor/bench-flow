@@ -216,7 +216,7 @@ const DashboardView = ({ onStart }) => {
     const flowDescription = newFlowDescription.trim() || `Started on ${new Date().toLocaleString()}`;
     
     // Start a brand new workflow
-    const newWorkflow = startWorkflow(flowName, flowDescription);
+    startWorkflow(flowName, flowDescription);
     
     // Clear any existing schema data
     clearSchema();

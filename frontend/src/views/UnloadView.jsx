@@ -35,7 +35,6 @@ import FileUpload from '../components/common/FileUpload';
 import { useSchemaContext } from '../context/SchemaContext';
 import { useDSBulkContext } from '../context/DSBulkContext';
 import { useAppContext } from '../context/AppContext';
-import { schemaApi } from '../services/api';
 
 const UnloadView = ({ onNext }) => {
   const { 

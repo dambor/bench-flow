@@ -10,7 +10,7 @@ export const useSchemaContext = () => useContext(SchemaContext);
 
 // Provider component
 export const SchemaProvider = ({ children }) => {
-  const { setError, addNotification, updateWorkflow } = useAppContext();
+  const { setError, updateWorkflow } = useAppContext();
   
   // Schema state
   const [schemaData, setSchemaData] = useState(null);

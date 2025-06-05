@@ -45,13 +45,9 @@ const ReadYamlView = ({ onNext }) => {
   const {
     generatedReadYamlFiles,
     isProcessing,
-    primaryKeyColumns,
-    csvPath,
     processIngestionZip,
     processMultipleFiles,
-    processIngestionFile,
     generateReadYaml,
-    generateReadYamlJson,
     setPrimaryKeyColumns,
     setCsvPath
   } = useReadYamlContext();
@@ -73,10 +69,10 @@ const ReadYamlView = ({ onNext }) => {
     if (activeExecution && 
         activeExecution.result && 
         activeExecution.result.success && 
-        formValues && 
-        formValues.output_path) {
-      setCsvPathInput(formValues.output_path);
-      setCsvPath(formValues.output_path);
+        activeExecution.formValues && 
+        activeExecution.formValues.output_path) {
+      setCsvPathInput(activeExecution.formValues.output_path);
+      setCsvPath(activeExecution.formValues.output_path);
     }
   }, [activeExecution]);
   

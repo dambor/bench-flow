@@ -46,7 +46,7 @@ const CommandGenerator = ({
   const [formValues, setFormValues] = useState(initialValues);
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
-  const [commandGenerated, setCommandGenerated] = useState(false);
+  const [_commandGenerated, setCommandGenerated] = useState(false);
   
   // Update form values when initialValues changes
   useEffect(() => {

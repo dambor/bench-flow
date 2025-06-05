@@ -41,15 +41,10 @@ import { useAppContext } from '../context/AppContext';
 
 const ReaderView = ({ onNext }) => {
   const { 
-    generatedReadYamlFiles,
-    csvPath,
-    primaryKeyColumns 
+    generatedReadYamlFiles
   } = useReadYamlContext();
   
   const {
-    isValidated,
-    nb5Path,
-    isValidating,
     executeNB5,
     generateCommand,
     activeExecution,

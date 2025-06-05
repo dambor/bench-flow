@@ -170,7 +170,7 @@ const FileUpload = ({
   };
   
   // Clear errors
-  const clearErrors = () => {
+  const _clearErrors = () => {
     setErrors([]);
   };
   
